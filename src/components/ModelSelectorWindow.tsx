@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Check, Loader2 } from 'lucide-react';
-import { STANDARD_CLOUD_MODELS, prettifyModelId } from '../utils/modelUtils';
+import { CODEX_CLI_MODEL, CODEX_CLI_MODEL_PRESETS, codexCliSelectorId, getCodexCliModelDisplayName, STANDARD_CLOUD_MODELS, prettifyModelId } from '../utils/modelUtils';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 
 // Define Model Types
 interface ModelOption {
     id: string;
     name: string;
-    type: 'cloud' | 'local' | 'custom' | 'ollama';
+    type: 'cloud' | 'local' | 'custom' | 'ollama' | 'codex-cli';
     provider?: string;
 }
 
@@ -43,7 +43,10 @@ const ModelSelectorWindow = () => {
                 // 2. Custom Providers
                 const customProviders = await window.electronAPI?.getCustomProviders?.() || [];
 
-                // 3. Ollama
+                // 3. Codex CLI
+                const codexCliConfig = await window.electronAPI?.getCodexCliConfig?.();
+
+                // 4. Ollama
                 let ollamaModels: string[] = [];
                 try {
                     let oModels = await window.electronAPI?.getAvailableOllamaModels?.();
@@ -93,6 +96,15 @@ const ModelSelectorWindow = () => {
                 customProviders.forEach((p: any) => {
                     models.push({ id: p.id, name: p.name, type: 'custom' });
                 });
+
+                // Codex CLI
+                if (codexCliConfig?.enabled) {
+                    models.push({ id: CODEX_CLI_MODEL.id, name: `${CODEX_CLI_MODEL.name} (${prettifyModelId(codexCliConfig.model)})`, type: 'codex-cli', provider: 'codex-cli' });
+                    CODEX_CLI_MODEL_PRESETS.forEach(model => {
+                        const id = codexCliSelectorId(model.id);
+                        models.push({ id, name: getCodexCliModelDisplayName(id) || model.name, type: 'codex-cli', provider: 'codex-cli' });
+                    });
+                }
 
                 // Ollama
                 ollamaModels.forEach((m: string) => {

@@ -1,4 +1,5 @@
 import { DatabaseManager } from '../db/DatabaseManager';
+import { ModeContextRetriever } from './ModeContextRetriever';
 import {
     MODE_GENERAL_PROMPT,
     MODE_LOOKING_FOR_WORK_PROMPT,
@@ -7,6 +8,8 @@ import {
     MODE_TEAM_MEET_PROMPT,
     MODE_LECTURE_PROMPT,
     MODE_TECHNICAL_INTERVIEW_PROMPT,
+    SHARED_MODE_PREFIX,
+    SHARED_MODE_PREFIX_SHORT,
 } from '../llm/prompts';
 
 export type ModeTemplateType =
@@ -49,11 +52,13 @@ export const MODE_TEMPLATES: Array<{
     label: string;
     description: string;
 }> = [
-    { type: 'sales',            label: 'Sales',            description: 'Close deals with strategic discovery and objection handling.' },
-    { type: 'recruiting',       label: 'Recruiting',       description: 'Evaluate candidates with structured interview insights.' },
-    { type: 'team-meet',        label: 'Team Meet',        description: 'Track action items and key decisions from meetings.' },
-    { type: 'looking-for-work', label: 'Looking for work', description: 'Answer interview questions with confidence and clarity.' },
-    { type: 'lecture',          label: 'Lecture',          description: 'Capture key concepts and content from lectures.' },
+    { type: 'general',              label: 'General',              description: 'Universal adaptive copilot for any meeting or conversation.' },
+    { type: 'sales',                label: 'Sales',                description: 'Close deals with strategic discovery and objection handling.' },
+    { type: 'recruiting',           label: 'Recruiting',           description: 'Evaluate candidates with structured interview insights.' },
+    { type: 'team-meet',            label: 'Team Meet',            description: 'Track action items and key decisions from meetings.' },
+    { type: 'looking-for-work',     label: 'Looking for work',     description: 'Answer interview questions with confidence and clarity.' },
+    { type: 'technical-interview',  label: 'Technical Interview',  description: 'Whiteboard-style coding and system design support.' },
+    { type: 'lecture',              label: 'Lecture',              description: 'Capture key concepts and content from lectures.' },
 ];
 
 // Default note sections seeded when a mode is created from a template
@@ -119,6 +124,25 @@ const TEMPLATE_SYSTEM_PROMPTS: Record<ModeTemplateType, string> = {
     lecture: MODE_LECTURE_PROMPT,
 };
 
+// Startup invariant: every MODE_*_PROMPT must begin with one of the two shared
+// prefixes so getActiveModeSystemPromptSuffix() can strip duplicated tokens.
+// If a future template diverges, we silently regress to shipping ~1.6K duplicate
+// tokens per request. Warn loudly here instead so the regression is caught at
+// app launch, not by a prod cost spike.
+for (const [templateType, prompt] of Object.entries(TEMPLATE_SYSTEM_PROMPTS)) {
+    if (!prompt.startsWith(SHARED_MODE_PREFIX) && !prompt.startsWith(SHARED_MODE_PREFIX_SHORT)) {
+        console.warn(
+            `[ModesManager] WARN: MODE template '${templateType}' does not start with ` +
+            `SHARED_MODE_PREFIX or SHARED_MODE_PREFIX_SHORT. Token deduplication will fall ` +
+            `back to sending the full template — duplicate-token regression. See prompts.ts.`
+        );
+    }
+}
+
+export function encodeModeContextPayload(value: unknown): string {
+    return JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e');
+}
+
 function rowToMode(row: any): Mode {
     return {
         id: row.id,
@@ -153,6 +177,7 @@ function rowToSection(row: any): ModeNoteSection {
 
 export class ModesManager {
     private static instance: ModesManager;
+    private readonly modeContextRetriever = new ModeContextRetriever();
 
     private constructor() {}
 
@@ -167,26 +192,58 @@ export class ModesManager {
 
     public getModes(): Mode[] {
         const modes = DatabaseManager.getInstance().getModes().map(rowToMode);
-        
-        // Auto-seed the un-deletable General mode if it doesn't exist
-        if (!modes.some(m => m.templateType === 'general')) {
-            const generalMode = this.createMode({ name: 'General', templateType: 'general' });
-            modes.push(generalMode);
-        }
-        
-        // Always enforce 'general' at the very top of the list
+
+        // Always enforce 'general' at the very top of the list.
+        // L1: id is the secondary sort key for stable ordering when two modes
+        // share createdAt to the millisecond.
         modes.sort((a, b) => {
             if (a.templateType === 'general') return -1;
             if (b.templateType === 'general') return 1;
-            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(); // oldest first or whatever default
+            const ta = new Date(a.createdAt).getTime();
+            const tb = new Date(b.createdAt).getTime();
+            if (ta !== tb) return ta - tb;
+            return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
         });
-        
+
         return modes;
+    }
+
+    // Seed the un-deletable General mode once at app init. Idempotent.
+    public ensureSeeded(): void {
+        const modes = DatabaseManager.getInstance().getModes().map(rowToMode);
+        if (!modes.some(m => m.templateType === 'general')) {
+            this.createMode({ name: 'General', templateType: 'general' });
+        }
     }
 
     public getActiveMode(): Mode | null {
         const row = DatabaseManager.getInstance().getActiveMode();
         return row ? rowToMode(row) : null;
+    }
+
+    // Mode templates where a salary-negotiation coaching card would replace the
+    // user's expected answer with off-topic content. Technical interviews are
+    // coding/system-design only; team meetings and lectures have no salary
+    // scope. Issue #272: technical-interview users were getting one-line salary
+    // coaching cards instead of technical answers from the "What to Answer"
+    // button because the premium negotiation tracker fires on any interviewer
+    // utterance regardless of the active mode.
+    private static readonly NEGOTIATION_INCOMPATIBLE_TEMPLATES: ReadonlySet<ModeTemplateType> = new Set([
+        'technical-interview',
+        'team-meet',
+        'lecture',
+    ]);
+
+    /**
+     * True when negotiation coaching is contextually appropriate for the active
+     * mode. False for technical-interview, team-meet, and lecture — modes where
+     * a salary card mid-conversation overwrites the user's expected answer.
+     * Defaults to true when no mode is active.
+     */
+    public isNegotiationCoachingAllowed(): boolean {
+        const mode = this.getActiveMode();
+        if (!mode) return true;
+        return !ModesManager.NEGOTIATION_INCOMPATIBLE_TEMPLATES.has(mode.templateType);
     }
 
     public createMode(params: { name: string; templateType: ModeTemplateType }): Mode {
@@ -301,12 +358,29 @@ export class ModesManager {
 
     /**
      * Returns the system prompt suffix for the active mode's template type.
-     * Empty string if general or no active mode.
+     * Returns the template's MODE_*_PROMPT (including general's MODE_GENERAL_PROMPT
+     * and technical-interview's MODE_TECHNICAL_INTERVIEW_PROMPT). Empty string
+     * only when no mode is active.
      */
     public getActiveModeSystemPromptSuffix(): string {
         const mode = this.getActiveMode();
         if (!mode) return '';
-        return TEMPLATE_SYSTEM_PROMPTS[mode.templateType] ?? '';
+        const full = TEMPLATE_SYSTEM_PROMPTS[mode.templateType] ?? '';
+        // Strip the shared prefix that's already in HARD_SYSTEM_PROMPT, otherwise
+        // CORE_IDENTITY + EXECUTION_CONTRACT + CONTEXT_INTELLIGENCE_LAYER (+
+        // SHARED_CODING_RULES for coding modes) ship twice per request — ~1.6K
+        // duplicated tokens for coding modes, ~1.2K for non-coding.
+        //
+        // Try the long (4-block) prefix first to handle coding modes, then the
+        // short (3-block) prefix for sales/recruiting/team-meet/lecture which
+        // intentionally omit SHARED_CODING_RULES. Fall back to unchanged if
+        // neither matches — safe default for future template drift.
+        for (const prefix of [SHARED_MODE_PREFIX, SHARED_MODE_PREFIX_SHORT]) {
+            if (full.startsWith(prefix)) {
+                return full.slice(prefix.length).replace(/^\s+/, '');
+            }
+        }
+        return full;
     }
 
     /**
@@ -319,6 +393,125 @@ export class ModesManager {
     private static readonly MAX_FILE_CHARS = 12_000;
     private static readonly MAX_TOTAL_CHARS = 40_000;
 
+    public buildRetrievedActiveModeContextBlock(query: string, transcript?: string, tokenBudget?: number): string {
+        const mode = this.getActiveMode();
+        if (!mode) return '';
+
+        const result = this.modeContextRetriever.retrieve(mode, this.getReferenceFiles(mode.id), {
+            query,
+            transcript,
+            tokenBudget,
+        });
+
+        return result.formattedContext;
+    }
+
+    /**
+     * Phase 4 — async hybrid retrieval (FTS + vector + dedupe + lexical fallback).
+     * Callers in async paths (WhatToAnswerLLM, LLMHelper paths) should prefer
+     * this. If hybrid throws (DB missing, embedding provider unavailable),
+     * we fall back to the existing sync lexical path so the answer flow
+     * never breaks. Telemetry distinguishes hybrid hits from lexical fallback.
+     */
+    public async buildRetrievedActiveModeContextBlockHybrid(query: string, transcript?: string, tokenBudget?: number): Promise<string> {
+        const mode = this.getActiveMode();
+        if (!mode) return '';
+        const files = this.getReferenceFiles(mode.id);
+
+        // Telemetry: rag_query / rag_hit / rag_miss / rag_lexical_fallback.
+        let usedHybrid = false;
+        let usedFallback = false;
+        let chunkCount = 0;
+        try {
+            const { telemetryService } = require('./telemetry/TelemetryService');
+            telemetryService.track({
+                name: 'rag_query',
+                modeId: mode.id,
+                properties: { modeTemplateType: mode.templateType, fileCount: files.length, hasTranscript: Boolean(transcript) },
+            });
+        } catch { /* non-fatal */ }
+
+        try {
+            const result = await this.modeContextRetriever.retrieveHybrid(mode, files, {
+                query,
+                transcript,
+                tokenBudget,
+            });
+            usedHybrid = result.usedHybrid;
+            usedFallback = result.usedFallback;
+            chunkCount = result.chunks?.length ?? 0;
+            if (result.formattedContext) {
+                try {
+                    const { telemetryService } = require('./telemetry/TelemetryService');
+                    telemetryService.track({
+                        name: usedHybrid ? 'rag_hit' : 'rag_lexical_fallback',
+                        modeId: mode.id,
+                        properties: { chunkCount, modeTemplateType: mode.templateType },
+                    });
+                } catch { /* non-fatal */ }
+                return result.formattedContext;
+            }
+            // Empty hybrid result — fall through to lexical so we still try.
+        } catch (err) {
+            console.warn('[ModesManager] hybrid retrieval failed, falling back to lexical:', (err as Error)?.message);
+        }
+
+        const lexical = this.buildRetrievedActiveModeContextBlock(query, transcript, tokenBudget);
+        try {
+            const { telemetryService } = require('./telemetry/TelemetryService');
+            telemetryService.track({
+                name: lexical ? 'rag_lexical_fallback' : 'rag_miss',
+                modeId: mode.id,
+                properties: { modeTemplateType: mode.templateType, fileCount: files.length },
+            });
+        } catch { /* non-fatal */ }
+        return lexical;
+    }
+
+    /**
+     * Phase 6 — summary-safe context block for post-call summarization.
+     *
+     * Includes the mode's `customContext` (low-token, user-authored, trusted) plus
+     * up to a small budget of *retrieved* reference snippets. Never returns full
+     * raw reference file bodies, even when retrieval misses — that data path is
+     * covered by `buildActiveModeContextBlock()` and remains legacy/supporting.
+     *
+     * Callers can opt out of the retrieved-snippets portion via
+     * `options.includeReferenceSnippets = false` to honor the
+     * `reference_files` provider data scope without losing mode customContext.
+     */
+    public buildSummarySafeModeContextBlock(
+        modeId: string,
+        options?: { query?: string; transcript?: string; tokenBudget?: number; includeReferenceSnippets?: boolean }
+    ): string {
+        const mode = this.getModes().find(m => m.id === modeId);
+        if (!mode) return '';
+
+        const parts: string[] = [];
+
+        if (mode.customContext.trim()) {
+            parts.push(`<active_mode_custom_instructions format="json">\n${encodeModeContextPayload({ content: mode.customContext.trim() })}\n</active_mode_custom_instructions>`);
+        }
+
+        const includeReferenceSnippets = options?.includeReferenceSnippets !== false;
+        if (includeReferenceSnippets) {
+            try {
+                const result = this.modeContextRetriever.retrieve(mode, this.getReferenceFiles(mode.id), {
+                    query: options?.query ?? '',
+                    transcript: options?.transcript ?? '',
+                    tokenBudget: options?.tokenBudget ?? 1200,
+                });
+                if (result?.formattedContext) {
+                    parts.push(result.formattedContext);
+                }
+            } catch (err) {
+                console.warn('[ModesManager] summary-safe retrieval failed (non-fatal):', (err as Error)?.message);
+            }
+        }
+
+        return parts.length > 0 ? '\n' + parts.join('\n\n') + '\n' : '';
+    }
+
     public buildActiveModeContextBlock(): string {
         const mode = this.getActiveMode();
         if (!mode) return '';
@@ -326,10 +519,11 @@ export class ModesManager {
         const parts: string[] = [];
 
         if (mode.customContext.trim()) {
-            parts.push(`<user_context>\n${mode.customContext.trim()}\n</user_context>`);
+            parts.push(`<active_mode_custom_instructions format="json">\n${encodeModeContextPayload({ content: mode.customContext.trim() })}\n</active_mode_custom_instructions>`);
         }
 
         const files = this.getReferenceFiles(mode.id);
+        const MARKER = '[...truncated]';
         let totalChars = 0;
 
         for (const file of files) {
@@ -339,14 +533,32 @@ export class ModesManager {
             const remaining = ModesManager.MAX_TOTAL_CHARS - totalChars;
             if (remaining <= 0) break;
 
-            // Slice first, then append truncation marker so total never exceeds MAX_FILE_CHARS
-            const capped = raw.length > ModesManager.MAX_FILE_CHARS
-                ? raw.slice(0, ModesManager.MAX_FILE_CHARS - 14) + '\n[...truncated]'
-                : raw;
-            const used = Math.min(capped.length, remaining);
-            const content = capped.slice(0, used);
+            // Cap per-file. Only append the truncation marker when there's
+            // headroom for the full marker — never emit a partial '[...truncat'.
+            const fileCap = ModesManager.MAX_FILE_CHARS;
+            let capped: string;
+            if (raw.length > fileCap) {
+                if (fileCap > MARKER.length + 1) {
+                    capped = raw.slice(0, fileCap - MARKER.length - 1) + '\n' + MARKER;
+                } else {
+                    capped = raw.slice(0, fileCap);
+                }
+            } else {
+                capped = raw;
+            }
 
-            parts.push(`<reference_file name="${file.fileName}">\n${content}\n</reference_file>`);
+            // Apply the cross-file budget. If the slice would split the marker, drop it.
+            let content: string;
+            if (capped.length <= remaining) {
+                content = capped;
+            } else if (remaining >= MARKER.length + 1) {
+                content = capped.slice(0, remaining - MARKER.length - 1) + '\n' + MARKER;
+            } else {
+                content = capped.slice(0, remaining);
+            }
+
+            const payload = encodeModeContextPayload({ fileName: file.fileName, content });
+            parts.push(`<reference_file format="json">\n${payload}\n</reference_file>`);
             totalChars += content.length;
         }
 

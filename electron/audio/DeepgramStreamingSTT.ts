@@ -103,6 +103,16 @@ export class DeepgramStreamingSTT extends EventEmitter {
         console.log('[DeepgramStreaming] Stopped');
     }
 
+    public finalize(): void {
+        if (!this.isActive || !this.isOpen || !this.live) return;
+        try {
+            this.live.finalize();
+            console.log('[DeepgramStreaming] Sent Finalize to flush server buffer');
+        } catch (err: any) {
+            console.error('[DeepgramStreaming] Finalize failed:', err?.message);
+        }
+    }
+
     public write(chunk: Buffer): void {
         if (!this.isActive) return;
 
@@ -158,7 +168,7 @@ export class DeepgramStreamingSTT extends EventEmitter {
                         const alt = data.channel?.alternatives?.[0];
                         const transcript = alt?.transcript;
                         const isFinal = data.is_final ?? false;
-                        console.log(`[DeepgramStreaming] Transcript event — isFinal=${isFinal}, text="${transcript ?? '(empty)'}"`);
+                        console.log(`[DeepgramStreaming] Transcript event`, { final: isFinal, length: transcript?.length ?? 0 });
                         if (!transcript) return;
                         this.emit('transcript', {
                             text: transcript,

@@ -33,10 +33,13 @@ export interface StoredCredentials {
     defaultModel?: string;
     nativelyApiKey?: string;
     // STT Provider settings
-    sttProvider?: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'natively';
+    sttProvider?: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'natively' | 'local-whisper';
     groqSttApiKey?: string;
     groqSttModel?: string;
     openAiSttApiKey?: string;
+    /** Custom OpenAI-compatible STT base URL (e.g. self-hosted Speaches).
+     *  Empty / unset → use https://api.openai.com. */
+    openAiSttBaseUrl?: string;
     deepgramApiKey?: string;
     elevenLabsApiKey?: string;
     azureApiKey?: string;
@@ -54,10 +57,10 @@ export interface StoredCredentials {
     openaiPreferredModel?: string;
     claudePreferredModel?: string;
     // Free trial state
-    trialToken?:     string;   // server-issued signed token (natively_trial_…)
+    trialToken?: string;   // server-issued signed token (natively_trial_…)
     trialExpiresAt?: string;   // ISO timestamp — local copy for startup check
     trialStartedAt?: string;   // ISO timestamp
-    trialClaimed?:   boolean;  // set true on first claim, never cleared — hides start card permanently
+    trialClaimed?: boolean;  // set true on first claim, never cleared — hides start card permanently
 }
 
 export class CredentialsManager {
@@ -112,7 +115,7 @@ export class CredentialsManager {
         return this.credentials.customProviders || [];
     }
 
-    public getSttProvider(): 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'natively' {
+    public getSttProvider(): 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'natively' | 'local-whisper' {
         const provider = this.credentials.sttProvider || 'none';
         // Self-heal: if provider is 'none' but a Natively key exists, the user is in a
         // broken state (key cleared then re-entered via a path that skipped auto-promote,
@@ -140,6 +143,10 @@ export class CredentialsManager {
 
     public getOpenAiSttApiKey(): string | undefined {
         return this.credentials.openAiSttApiKey;
+    }
+
+    public getOpenAiSttBaseUrl(): string | undefined {
+        return this.credentials.openAiSttBaseUrl;
     }
 
     public getElevenLabsApiKey(): string | undefined {
@@ -190,6 +197,42 @@ export class CredentialsManager {
     }
 
     // =========================================================================
+    // Vision provider availability — used by the vision-first screen pipeline
+    // =========================================================================
+
+    /**
+     * True if at least one configured provider is vision-capable.
+     * Used by ScreenUnderstandingService to gate vision_only / decide fallback.
+     */
+    public anyVisionProviderConfigured(): boolean {
+        if (this.credentials.nativelyApiKey) return true;       // Natively API supports vision
+        if (this.credentials.openaiApiKey) return true;          // gpt-4o / gpt-5 vision
+        if (this.credentials.claudeApiKey) return true;          // Claude vision
+        if (this.credentials.geminiApiKey) return true;          // Gemini vision
+        if (this.credentials.groqApiKey) return true;            // Groq llama-4-scout vision
+        // Custom providers: only count if they have screenshots scope AND multimodal flag
+        const custom = this.credentials.customProviders || [];
+        if (custom.some(p => (p as any)?.multimodal === true)) return true;
+        return this.anyLocalVisionProviderConfigured();
+    }
+
+    /**
+     * True if at least one LOCAL vision provider is configured (Ollama vision model,
+     * Codex CLI with vision support, or a local-only custom provider).
+     * Used by private_vision mode to enforce no cloud-vision calls.
+     */
+    public anyLocalVisionProviderConfigured(): boolean {
+        // Ollama: caller verifies the configured model is vision-capable via modelCapabilities.
+        // Here we only assert the runtime is configured — model gating happens in the chain.
+        const ollamaBaseUrl = (this.credentials as any).ollamaBaseUrl as string | undefined;
+        if (ollamaBaseUrl && ollamaBaseUrl.trim().length > 0) return true;
+        // Codex CLI is local in normal install — capability is verified by ProviderRouter.
+        const codexCliPath = (this.credentials as any).codexCliPath as string | undefined;
+        if (codexCliPath && codexCliPath.trim().length > 0) return true;
+        return false;
+    }
+
+    // =========================================================================
     // Setters (auto-save)
     // =========================================================================
 
@@ -223,7 +266,7 @@ export class CredentialsManager {
         console.log('[CredentialsManager] Google Service Account path updated');
     }
 
-    public setSttProvider(provider: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'natively'): void {
+    public setSttProvider(provider: 'none' | 'google' | 'groq' | 'openai' | 'deepgram' | 'elevenlabs' | 'azure' | 'ibmwatson' | 'soniox' | 'natively' | 'local-whisper'): void {
         this.credentials.sttProvider = provider;
         this.saveCredentials();
         console.log(`[CredentialsManager] STT Provider set to: ${provider}`);
@@ -245,6 +288,15 @@ export class CredentialsManager {
         this.credentials.openAiSttApiKey = key;
         this.saveCredentials();
         console.log('[CredentialsManager] OpenAI STT API Key updated');
+    }
+
+    public setOpenAiSttBaseUrl(url: string): void {
+        // Store undefined (not empty string) when clearing, so callers can fall back
+        // to the default api.openai.com endpoint with a simple truthiness check.
+        const trimmed = url.trim();
+        this.credentials.openAiSttBaseUrl = trimmed || undefined;
+        this.saveCredentials();
+        console.log(`[CredentialsManager] OpenAI STT Base URL set to: ${trimmed || '(default)'}`);
     }
 
     public setGroqSttModel(model: string): void {
@@ -430,10 +482,10 @@ export class CredentialsManager {
     }
 
     public setTrialToken(token: string, expiresAt: string, startedAt: string): void {
-        this.credentials.trialToken     = token;
+        this.credentials.trialToken = token;
         this.credentials.trialExpiresAt = expiresAt;
         this.credentials.trialStartedAt = startedAt;
-        this.credentials.trialClaimed   = true;
+        this.credentials.trialClaimed = true;
         this.saveCredentials();
         console.log('[CredentialsManager] Trial token stored, expires:', expiresAt);
     }
@@ -482,12 +534,7 @@ export class CredentialsManager {
     private saveCredentials(): void {
         try {
             if (!safeStorage.isEncryptionAvailable()) {
-                console.warn('[CredentialsManager] Encryption not available, falling back to plaintext');
-                // Fallback: save as plaintext (less secure, but functional)
-                const plainPath = CREDENTIALS_PATH + '.json';
-                const tmpPlain = plainPath + '.tmp';
-                fs.writeFileSync(tmpPlain, JSON.stringify(this.credentials));
-                fs.renameSync(tmpPlain, plainPath);
+                console.warn('[CredentialsManager] Encryption not available; credentials kept in memory only');
                 return;
             }
 
@@ -538,23 +585,14 @@ export class CredentialsManager {
                 return;
             }
 
-            // Fallback: try plaintext file
             const plaintextPath = CREDENTIALS_PATH + '.json';
             if (fs.existsSync(plaintextPath)) {
-                const data = fs.readFileSync(plaintextPath, 'utf-8');
                 try {
-                    const parsed = JSON.parse(data);
-                    if (typeof parsed === 'object' && parsed !== null) {
-                        this.credentials = parsed;
-                        console.log('[CredentialsManager] Loaded plaintext credentials');
-                    } else {
-                        throw new Error('Plaintext credentials is not a valid object');
-                    }
-                } catch (parseError) {
-                    console.error('[CredentialsManager] Failed to parse plaintext credentials — file may be corrupted. Starting fresh:', parseError);
-                    this.credentials = {};
+                    fs.unlinkSync(plaintextPath);
+                    console.log('[CredentialsManager] Removed plaintext credential file');
+                } catch (cleanupErr) {
+                    console.warn('[CredentialsManager] Could not remove plaintext credential file:', cleanupErr);
                 }
-                return;
             }
 
             console.log('[CredentialsManager] No stored credentials found');

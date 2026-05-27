@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react" // forcing refresh
-import { QueryClient, QueryClientProvider } from "react-query"
+import React, { useState, useEffect, useCallback } from "react" // forcing refresh
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { ToastProvider, ToastViewport } from "./components/ui/toast"
 import NativelyInterface from "./components/NativelyInterface"
 import SettingsPopup from "./components/SettingsPopup" // Keeping for legacy/specific window support if needed
@@ -17,6 +17,8 @@ import { TrialPromoToaster }    from "./components/trial/TrialPromoToaster"
 import { PermissionsToaster }   from "./components/onboarding/PermissionsToaster"
 import { AlertCircle } from "lucide-react"
 import { clampOverlayOpacity, OVERLAY_OPACITY_DEFAULT, getDefaultOverlayOpacity } from "./lib/overlayAppearance"
+import { getMeetingInterfaceTheme, type MeetingInterfaceTheme } from './lib/meetingInterfaceTheme'
+import { isMac } from "./utils/platformUtils"
 import {
   JDAwarenessToaster,
   ProfileFeatureToaster,
@@ -30,6 +32,7 @@ import {
 import { analytics } from "./lib/analytics/analytics.service"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 import ModesSettings from "./components/settings/ModesSettings"
+import { ProfileIntelligenceSettings } from "./components/ProfileIntelligenceSettings"
 
 const queryClient = new QueryClient()
 
@@ -87,10 +90,35 @@ const App: React.FC = () => {
   }, [isLauncherWindow, isOverlayWindow, isDefault]);
 
   // State
-  const [showStartup, setShowStartup] = useState(true);
+  // One-shot first-run startup sequence. Once the user dismisses it (or any
+  // future code flips the flag), it never appears again on subsequent launches.
+  const [showStartup, setShowStartup] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('natively_seen_startup_v1') !== 'true';
+    } catch {
+      return true;
+    }
+  });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [settingsInitialTab, setSettingsInitialTab] = useState('general');
+  const [settingsInitialTab, setSettingsInitialTab] = useState<string>('general');
   const [isModesOpen, setIsModesOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const openSettingsExclusive = useCallback((tab: string = 'general') => {
+    setIsModesOpen(false);
+    setIsProfileOpen(false);
+    setSettingsInitialTab(tab);
+    setIsSettingsOpen(true);
+  }, []);
+  const openProfileExclusive = useCallback(() => {
+    setIsModesOpen(false);
+    setIsSettingsOpen(false);
+    setIsProfileOpen(true);
+  }, []);
+  const openModesExclusive = useCallback(() => {
+    setIsProfileOpen(false);
+    setIsSettingsOpen(false);
+    setIsModesOpen(true);
+  }, []);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isPremiumActive, setIsPremiumActive] = useState(false);
   const [hasLoadedLicense, setHasLoadedLicense] = useState(false);
@@ -105,7 +133,9 @@ const App: React.FC = () => {
     const isUserSet = Number.isFinite(parsed) && parsed !== OVERLAY_OPACITY_DEFAULT;
     return isUserSet ? clampOverlayOpacity(parsed) : getDefaultOverlayOpacity();
   });
-  
+
+  const [meetingInterfaceTheme, setMeetingInterfaceThemeState] = useState<MeetingInterfaceTheme>(getMeetingInterfaceTheme);
+
   // Profile state for ad targeting
   const [hasProfile, setHasProfile] = useState(false);
   const [isLauncherMainView, setIsLauncherMainView] = useState(true);
@@ -137,7 +167,7 @@ const App: React.FC = () => {
   } | null>(null);
   const [showTrialExpiredModal, setShowTrialExpiredModal] = useState(false);
 
-  const isAppReady = !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow && !showStartup && !isSettingsOpen && isLauncherMainView;
+  const isAppReady = !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow && !showStartup && !isSettingsOpen && isLauncherMainView && !isProfileOpen;
   const { activeAd, dismissAd, previewAd } = useAdCampaigns(
     planDetails,
     hasProfile,
@@ -261,8 +291,7 @@ const App: React.FC = () => {
 
     // Listen for open-settings-tab events from other windows (e.g. overlay Modes button)
     const removeOpenSettingsTab = window.electronAPI?.onOpenSettingsTab?.((tab: string) => {
-      setSettingsInitialTab(tab);
-      setIsSettingsOpen(true);
+      openSettingsExclusive(tab);
     });
 
     // Listen for meeting processing completion to trigger post-meeting ads
@@ -338,6 +367,12 @@ const App: React.FC = () => {
     });
   }, [isOverlayWindow]);
 
+  useEffect(() => {
+    const handleStorage = () => setMeetingInterfaceThemeState(getMeetingInterfaceTheme());
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
 
   // Handlers
   const handleReindex = async () => {
@@ -352,28 +387,34 @@ const App: React.FC = () => {
       localStorage.setItem('natively_last_meeting_start', Date.now().toString());
       const inputDeviceId = localStorage.getItem('preferredInputDeviceId');
       let outputDeviceId = localStorage.getItem('preferredOutputDeviceId');
-      const useExperimentalSck = localStorage.getItem('useExperimentalSckBackend') === 'true';
+      // SCK is a macOS-only backend (ScreenCaptureKit + CoreAudio Process Tap
+      // live in the Rust speaker module under #[cfg(target_os = "macos")]).
+      // F-003 hid the toggle UI on Windows, but the localStorage key can be
+      // present on a Windows machine via cross-OS sync or restored backup —
+      // routing "sck" as an outputDeviceId then hands the Windows speaker
+      // module an unknown WASAPI device id and silently breaks system audio.
+      // Defense-in-depth: also require isMac at the consumer.
+      const useExperimentalSck = isMac && localStorage.getItem('useExperimentalSckBackend') === 'true';
 
       // Override output device ID to force SCK if experimental mode is enabled
       // Default to CoreAudio unless experimental is enabled
       if (useExperimentalSck) {
         console.log("[App] Using ScreenCaptureKit backend (Experimental).");
         outputDeviceId = "sck";
-      } else {
+      } else if (isMac) {
         console.log("[App] Using CoreAudio backend (Default).");
       }
 
+      const meetingRetention = await window.electronAPI.getMeetingRetention?.().catch(() => 'forever');
       const result = await window.electronAPI.startMeeting({
-        audio: { inputDeviceId, outputDeviceId }
+        audio: { inputDeviceId, outputDeviceId },
+        doNotPersist: meetingRetention === 'never'
       });
       if (result.success) {
         analytics.trackMeetingStarted();
-        // Switch to Overlay Mode via IPC
-        // The main process handles window switching, but we can reinforce it or just trust main.
-        // Actually, main process startMeeting triggers nothing UI-wise unless we tell it to switch window
-        // But we configured main.ts to not auto-switch?
-        // Let's explicitly request mode change.
-        await window.electronAPI.setWindowMode('overlay');
+        // Window swap happens inside main's startMeeting() now (before the
+        // meeting-state broadcast) to avoid a blue→green CTA flash on the
+        // launcher. No follow-up setWindowMode IPC needed here.
       } else {
         console.error("Failed to start meeting:", result.error);
       }
@@ -382,31 +423,36 @@ const App: React.FC = () => {
     }
   };
 
-  const handleEndMeeting = async () => {
+  const handleEndMeeting = () => {
     console.log("[App.tsx] handleEndMeeting triggered");
     analytics.trackMeetingEnded();
     setIsProcessingMeeting(true);
-    try {
-      await window.electronAPI.endMeeting();
-      console.log("[App.tsx] endMeeting IPC completed");
-      
-      const startStr = localStorage.getItem('natively_last_meeting_start');
-      if (startStr) {
-        const duration = Date.now() - parseInt(startStr, 10);
-        const threshold = import.meta.env.DEV ? 10000 : 180000;
-        if (duration >= threshold) {
-          localStorage.setItem('natively_show_profile_toaster', 'true');
-        }
-        localStorage.removeItem('natively_last_meeting_start');
-      }
 
-      // Switch back to Native Launcher Mode
-      // (Ad delay tracking moved to onMeetingsUpdated listener so ads wait for note generation to finish)
-      await window.electronAPI.setWindowMode('launcher');
-    } catch (err) {
-      console.error("Failed to end meeting:", err);
-      window.electronAPI.setWindowMode('launcher');
+    // Local bookkeeping that does not depend on the main process.
+    const startStr = localStorage.getItem('natively_last_meeting_start');
+    if (startStr) {
+      const duration = Date.now() - parseInt(startStr, 10);
+      const threshold = import.meta.env.DEV ? 10000 : 180000;
+      if (duration >= threshold) {
+        localStorage.setItem('natively_show_profile_toaster', 'true');
+      }
+      localStorage.removeItem('natively_last_meeting_start');
     }
+
+    // Fire-and-forget: main's endMeeting() handler now performs the
+    // launcher swap synchronously at the top, BEFORE any blocking audio
+    // teardown. Awaiting here would stall the overlay's React render
+    // loop for the IPC round-trip while libuv-blocking setImmediate
+    // native stops fire on the main process — which is the lag the user
+    // was seeing. The launcher window receives a 'meetings-updated'
+    // event after the BG teardown so its list refreshes on its own.
+    window.electronAPI.endMeeting().catch(err => {
+      console.error("Failed to end meeting:", err);
+      // Belt-and-suspenders: if the IPC itself rejected, the swap may
+      // not have happened — request it manually so the user isn't
+      // stranded on a dead overlay.
+      window.electronAPI.setWindowMode('launcher');
+    });
   };
 
   // Render Logic
@@ -456,6 +502,7 @@ const App: React.FC = () => {
                 <NativelyInterface
                   onEndMeeting={handleEndMeeting}
                   overlayOpacity={overlayOpacity}
+                  interfaceTheme={meetingInterfaceTheme}
                 />
               </div>
               <ToastViewport />
@@ -478,7 +525,10 @@ const App: React.FC = () => {
             initial={{ opacity: 1 }}
             exit={{ opacity: 0, scale: 1.1, pointerEvents: "none", transition: { duration: 0.6, ease: "easeInOut" } }}
           >
-            <StartupSequence onComplete={() => setShowStartup(false)} />
+            <StartupSequence onComplete={() => {
+              try { localStorage.setItem('natively_seen_startup_v1', 'true'); } catch {}
+              setShowStartup(false);
+            }} />
           </motion.div>
         ) : (
           <motion.div
@@ -497,11 +547,9 @@ const App: React.FC = () => {
                 <div id="launcher-container" className="h-full w-full relative">
                   <Launcher
                     onStartMeeting={handleStartMeeting}
-                    onOpenSettings={(tab = 'general') => {
-                      setSettingsInitialTab(tab);
-                      setIsSettingsOpen(true);
-                    }}
-                    onOpenModes={() => setIsModesOpen(true)}
+                    onOpenSettings={(tab = 'general') => openSettingsExclusive(tab)}
+                    onOpenProfile={() => openProfileExclusive()}
+                    onOpenModes={() => openModesExclusive()}
                     onPageChange={setIsLauncherMainView}
                     ollamaPullStatus={ollamaPullStatus}
                     ollamaPullPercent={ollamaPullPercent}
@@ -514,7 +562,6 @@ const App: React.FC = () => {
                     setIsSettingsOpen(false);
                   }}
                   initialTab={settingsInitialTab}
-                  isTrialActive={!!activeTrial}
                 />
                 <AnimatePresence>
                   {isModesOpen && (
@@ -528,13 +575,58 @@ const App: React.FC = () => {
                       onClick={(e) => { if (e.target === e.currentTarget) setIsModesOpen(false); }}
                     >
                       <motion.div
-                        initial={{ opacity: 0, scale: 0.97, y: 8 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.97, y: 8 }}
-                        transition={{ duration: 0.18, ease: [0.19, 1, 0.22, 1] }}
-                        className="w-[820px] h-[600px] max-w-[95vw] max-h-[90vh] rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-[#141414]"
+                        initial={{ opacity: 0, scale: 0.92, y: 18, filter: 'blur(12px)' }}
+                        animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+                        exit={{ opacity: 0, scale: 0.96, y: 8, filter: 'blur(8px)' }}
+                        transition={{
+                          opacity: { duration: 0.32, ease: [0.23, 1, 0.32, 1] },
+                          filter: { duration: 0.34, ease: [0.23, 1, 0.32, 1] },
+                          scale: { type: 'spring', stiffness: 320, damping: 34, mass: 0.9 },
+                          y: { type: 'spring', stiffness: 320, damping: 34, mass: 0.9 },
+                        }}
+                        style={{
+                          willChange: 'transform, opacity, filter',
+                          transformOrigin: 'center',
+                          boxShadow: '0 30px 80px -20px rgba(0,0,0,0.65), 0 16px 40px -12px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06)',
+                        }}
+                        className="w-[820px] h-[600px] max-w-[95vw] max-h-[90vh] rounded-2xl overflow-hidden border border-white/10 bg-[#141414]"
                       >
-                        <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenNativelyAPI={() => { setIsModesOpen(false); setSettingsInitialTab('natively-api'); setIsSettingsOpen(true); }} />
+                        <ModesSettings onClose={() => setIsModesOpen(false)} isPremium={isPremiumActive} isLoaded={hasLoadedLicense} isTrialActive={!!activeTrial} onOpenNativelyAPI={() => openSettingsExclusive('natively-api')} />
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                <AnimatePresence>
+                  {isProfileOpen && (
+                    <motion.div
+                      key="profile-panel"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+                      onClick={(e) => { if (e.target === e.currentTarget) setIsProfileOpen(false); }}
+                    >
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.92, y: 18, filter: 'blur(12px)' }}
+                        animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+                        exit={{ opacity: 0, scale: 0.96, y: 8, filter: 'blur(8px)' }}
+                        transition={{
+                          opacity: { duration: 0.32, ease: [0.23, 1, 0.32, 1] },
+                          filter: { duration: 0.34, ease: [0.23, 1, 0.32, 1] },
+                          scale: { type: 'spring', stiffness: 320, damping: 34, mass: 0.9 },
+                          y: { type: 'spring', stiffness: 320, damping: 34, mass: 0.9 },
+                        }}
+                        style={{
+                          willChange: 'transform, opacity, filter',
+                          transformOrigin: 'center',
+                          boxShadow: '0 30px 80px -20px rgba(0,0,0,0.65), 0 16px 40px -12px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.06)',
+                        }}
+                        className="w-[820px] h-[600px] max-w-[95vw] max-h-[90vh] rounded-2xl overflow-hidden border border-white/10 bg-[#141414]"
+                      >
+                        <ProfileIntelligenceSettings
+                          onClose={() => setIsProfileOpen(false)}
+                        />
                       </motion.div>
                     </motion.div>
                   )}
@@ -595,10 +687,7 @@ const App: React.FC = () => {
         <FreeTrialBanner
           expiresAt={activeTrial.expiresAt}
           usage={activeTrial.usage}
-          onUpgrade={() => {
-            setSettingsInitialTab('api');
-            setIsSettingsOpen(true);
-          }}
+          onUpgrade={() => openSettingsExclusive('api')}
         />
       )}
 
@@ -628,8 +717,7 @@ const App: React.FC = () => {
         }}
         onManualSetup={() => {
           setShowTrialPromo(false);
-          setSettingsInitialTab('api');
-          setIsSettingsOpen(true);
+          openSettingsExclusive('api');
         }}
       />
 
@@ -658,10 +746,7 @@ const App: React.FC = () => {
         <NativelyApiPromoToaster
           isOpen={activeAd === 'natively_api'}
           onDismiss={() => dismissAd('natively_api')}
-          onOpenSettings={(tab: string) => {
-            setSettingsInitialTab(tab);
-            setIsSettingsOpen(true);
-          }}
+          onOpenSettings={(tab: string) => openSettingsExclusive(tab)}
         />
       )}
       {(isLauncherMainView || !!activeAd) && (
@@ -669,18 +754,12 @@ const App: React.FC = () => {
           <ProfileFeatureToaster
             isOpen={activeAd === 'profile'}
             onDismiss={dismissAd}
-            onSetupProfile={() => {
-              setSettingsInitialTab('profile');
-              setIsSettingsOpen(true);
-            }}
+            onSetupProfile={() => openProfileExclusive()}
           />
           <JDAwarenessToaster
             isOpen={activeAd === 'jd'}
             onDismiss={dismissAd}
-            onSetupJD={() => {
-              setSettingsInitialTab('profile');
-              setIsSettingsOpen(true);
-            }}
+            onSetupJD={() => openProfileExclusive()}
           />
           <PremiumPromoToaster
             isOpen={activeAd === 'promo'}
@@ -722,8 +801,7 @@ const App: React.FC = () => {
           setActiveTrial(null);
           // After activation, open settings to Profile Intelligence
           setTimeout(() => {
-            setSettingsInitialTab('profile');
-            setIsSettingsOpen(true);
+            openProfileExclusive();
           }, 300);
         }}
         onDeactivated={() => { setIsPremiumActive(false); setPlanDetails({ isPremium: false }); }}

@@ -256,6 +256,12 @@ export class RestSTT extends EventEmitter {
         this.flushAndUpload();
     }
 
+    public finalize(): void {
+        if (!this.isActive) return;
+        console.log(`[RestSTT] Finalize — flushing buffer immediately`);
+        this.flushAndUpload();
+    }
+
     /**
      * Concatenate buffered chunks, add WAV header, and upload to REST API
      */
@@ -311,7 +317,7 @@ export class RestSTT extends EventEmitter {
             const transcript = await this.uploadAudio(wavBuffer);
 
             if (transcript && transcript.trim().length > 0) {
-                console.log(`[RestSTT] Transcript: "${transcript.substring(0, 60)}..."`);
+                console.log(`[RestSTT] Transcript received`, { length: transcript.trim().length });
                 this.emit('transcript', {
                     text: transcript.trim(),
                     isFinal: true,

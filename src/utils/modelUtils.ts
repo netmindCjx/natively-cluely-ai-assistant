@@ -35,6 +35,30 @@ export const STANDARD_CLOUD_MODELS: Record<string, {
     },
 };
 
+export const CODEX_CLI_MODEL = {
+    id: 'codex-cli',
+    name: 'Codex CLI',
+    desc: 'Local CLI transport',
+};
+
+export const CODEX_CLI_MODEL_PRESETS = [
+    { id: 'gpt-5.5', name: 'ChatGPT 5.5' },
+    { id: 'gpt-5.3-codex', name: 'Codex 5.3' },
+    { id: 'gpt-5.3-codex-spark', name: 'Codex Spark 5.3' },
+    { id: 'gpt-5.4', name: 'ChatGPT 5.4' },
+];
+
+export const codexCliSelectorId = (modelId: string): string => `codex-cli:${modelId}`;
+
+export const getCodexCliModelDisplayName = (id: string): string | null => {
+    if (id === CODEX_CLI_MODEL.id) return CODEX_CLI_MODEL.name;
+    if (!id.startsWith('codex-cli:')) return null;
+
+    const modelId = id.slice('codex-cli:'.length);
+    const preset = CODEX_CLI_MODEL_PRESETS.find(model => model.id === modelId);
+    return preset?.name || prettifyModelId(modelId);
+};
+
 export const prettifyModelId = (id: string): string => {
     if (!id) return '';
     return id.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());

@@ -9,8 +9,11 @@ import {
     AnswerLLM, AssistLLM, BrainstormLLM, ClarifyLLM, CodeHintLLM, FollowUpLLM, RecapLLM,
     FollowUpQuestionsLLM, WhatToAnswerLLM,
     prepareTranscriptForWhatToAnswer, buildTemporalContext,
-    AssistantResponse as LLMAssistantResponse, classifyIntent
+    AssistantResponse as LLMAssistantResponse, classifyIntent, planNextAssistantAction, PlannerDecision
 } from './llm';
+import { DynamicActionEngine } from './services/dynamic-actions/DynamicActionEngine';
+import { DynamicAction } from './services/dynamic-actions/DynamicAction';
+import { ScreenContext } from './services/screen/ScreenContextService';
 
 // Mode types
 export type IntelligenceMode = 'idle' | 'assist' | 'what_to_say' | 'follow_up' | 'recap' | 'clarify' | 'manual' | 'follow_up_questions' | 'code_hint' | 'brainstorm';
@@ -54,6 +57,17 @@ export interface IntelligenceModeEvents {
     'manual_answer_result': (answer: string, question: string) => void;
     'mode_changed': (mode: IntelligenceMode) => void;
     'error': (error: Error, mode: IntelligenceMode) => void;
+    // ARCHITECTURE: dedicated channel for live negotiation coaching payloads.
+    // Previously the coaching JSON was multiplexed into the suggested_answer
+    // / suggested_answer_token streams as a sentinel-string, which forced the
+    // renderer to JSON.parse every streaming token to detect the marker.
+    // Splitting the channel removes that hack and gives coaching its own
+    // typed payload.
+    'negotiation_coaching': (payload: unknown) => void;
+    // Phase 3: Cluely-style auto-detected action card. Engine emits one per
+    // newly created candidate action (post-dedupe). Renderer subscribes via
+    // window.electronAPI.onIntelligenceDynamicAction and renders cards.
+    'dynamic_action_emitted': (action: DynamicAction) => void;
 }
 
 export class IntelligenceEngine extends EventEmitter {
@@ -86,11 +100,42 @@ export class IntelligenceEngine extends EventEmitter {
     private lastTriggerTime: number = 0;
     private readonly triggerCooldown: number = 3000; // 3 seconds
 
+    // Speculative inference: start LLM on high-confidence interviewer partials
+    private speculativeTimer: ReturnType<typeof setTimeout> | null = null;
+    private speculativeText: string | null = null;
+    // epoch ms after which speculativeText is stale; Infinity while stream is still running
+    private speculativeTextExpiry: number = Infinity;
+    private readonly SPECULATIVE_DEBOUNCE_MS = 350;
+    private readonly SPECULATIVE_MIN_WORDS = 7;
+    private readonly SPECULATIVE_MIN_CONFIDENCE = 0.75;
+    private readonly SPECULATIVE_SIMILARITY_THRESHOLD = 0.75;
+
+    // Phase 3 dynamic actions — engine state. Created lazily on first
+    // setSessionContext call (or per-test injection). Null while engine has no
+    // active meeting, so detectAndEmitDynamicActions becomes a no-op safely.
+    private dynamicActionEngine: DynamicActionEngine | null = null;
+    private currentSessionId: string | null = null;
+    private currentDynamicActionModeId: string | null = null;
+    private currentDynamicActionTemplateType: string | null = null;
+
+    private static isNonAnswerSentinel(answer: string): boolean {
+        const normalized = answer.trim().toLowerCase().replace(/[.!?]+$/g, '');
+        return normalized === 'nothing actionable right now'
+            || normalized === 'nothing to capture right now';
+    }
+
     constructor(llmHelper: LLMHelper, session: SessionTracker) {
         super();
         this.llmHelper = llmHelper;
         this.session = session;
         this.initializeLLMs();
+
+        // Dedicated channel: LLMHelper invokes this when KnowledgeOrchestrator
+        // produces a live-negotiation-coaching payload. We forward it on the
+        // typed 'negotiation_coaching' event — no in-band JSON sentinels.
+        this.llmHelper.setNegotiationCoachingHandler((payload) => {
+            this.emit('negotiation_coaching', payload);
+        });
     }
 
     getLLMHelper(): LLMHelper {
@@ -133,12 +178,93 @@ export class IntelligenceEngine extends EventEmitter {
     // Transcript Handling (delegates to SessionTracker)
     // ============================================
 
+    private static wordsOf(text: string): Set<string> {
+        return new Set(text.toLowerCase().match(/\b\w+\b/g) ?? []);
+    }
+
+    // Returns a score in [0,1] that accounts for partial-to-final comparisons.
+    // Pure Jaccard underestimates similarity when the speculative text is a prefix of the final
+    // transcript (e.g., "Can you walk me through" vs. "Can you walk me through your design process?").
+    // We blend Jaccard with a containment score (what fraction of speculative words appear in final).
+    private static jaccardSimilarity(a: string, b: string): number {
+        const setA = IntelligenceEngine.wordsOf(a);
+        const setB = IntelligenceEngine.wordsOf(b);
+        if (setA.size === 0 && setB.size === 0) return 1;
+        let intersection = 0;
+        setA.forEach(w => { if (setB.has(w)) intersection++; });
+        const jaccard = intersection / (setA.size + setB.size - intersection);
+        // Containment: fraction of setA (speculative/partial) covered by setB (final)
+        const containment = setA.size > 0 ? intersection / setA.size : 0;
+        return Math.max(jaccard, containment * 0.9); // weight containment slightly below pure Jaccard
+    }
+
+    private static hasQuestionSignal(text: string): boolean {
+        if (text.trimEnd().endsWith('?')) return true;
+        return /\b(what|how|why|where|when|which|who|can you|could you|tell me|explain|describe|walk me through|talk me through)\b/i.test(text);
+    }
+
+    // Fires speculative LLM inference on a stable high-confidence interviewer partial.
+    // Debounced so rapid word-by-word partials don't spawn multiple streams.
+    private maybeSpeculate(segment: TranscriptSegment): void {
+        if (this.activeMode !== 'idle' && this.activeMode !== 'assist') return;
+
+        // Snapshot values now — STT adapters may mutate the same segment object in place.
+        const text = segment.text;
+        const confidence = segment.confidence ?? 0;
+        const words = text.trim().split(/\s+/).filter(Boolean);
+        if (
+            confidence < this.SPECULATIVE_MIN_CONFIDENCE ||
+            words.length < this.SPECULATIVE_MIN_WORDS ||
+            !IntelligenceEngine.hasQuestionSignal(text)
+        ) return;
+
+        if (this.speculativeTimer !== null) {
+            clearTimeout(this.speculativeTimer);
+        }
+
+        this.speculativeTimer = setTimeout(() => {
+            this.speculativeTimer = null;
+            // Re-check mode: a high-priority mode may have started during the debounce window.
+            if (this.activeMode !== 'idle' && this.activeMode !== 'assist') return;
+            // Don't overwrite a speculative stream that is already in flight.
+            if (this.speculativeText !== null) return;
+            if (Date.now() - this.lastTriggerTime < this.triggerCooldown) return;
+            console.log(`[IntelligenceEngine] Speculative inference fired on interim`, { length: text.length, confidence });
+            this.runWhatShouldISay(text, confidence || 0.8, undefined, { speculative: true })
+                .catch(err => console.error('[IntelligenceEngine] Speculative run error:', err));
+        }, this.SPECULATIVE_DEBOUNCE_MS);
+    }
+
     /**
      * Process transcript from native audio, and trigger follow-up if appropriate
      */
     handleTranscript(segment: TranscriptSegment, skipRefinementCheck: boolean = false): void {
         const result = this.session.handleTranscript(segment);
         this.lastTranscriptTime = Date.now();
+
+        if (segment.speaker === 'interviewer') {
+            if (!segment.final) {
+                this.maybeSpeculate(segment);
+            } else if (this.speculativeTimer !== null) {
+                // Final arrived — cancel debounce; handleSuggestionTrigger will do Jaccard check
+                clearTimeout(this.speculativeTimer);
+                this.speculativeTimer = null;
+            }
+        }
+
+        // Phase 3: detect dynamic action triggers on every final segment.
+        // Wrapped in try/catch so a regex bug or store fault never breaks the
+        // primary transcript path. No-op when engine has no active session
+        // or when current mode has no trigger pack registered.
+        if (segment.final) {
+            try {
+                this.detectAndEmitDynamicActions(segment);
+            } catch (err) {
+                // Intentionally swallow — dynamic actions are auxiliary and
+                // must never break the answer pipeline.
+                console.warn('[IntelligenceEngine] detectAndEmitDynamicActions failed', (err as Error)?.message);
+            }
+        }
 
         // Check for follow-up intent if user is speaking
         if (result && !skipRefinementCheck && result.role === 'user' && this.session.getLastAssistantMessage()) {
@@ -149,15 +275,173 @@ export class IntelligenceEngine extends EventEmitter {
         }
     }
 
+    // Phase 3 dynamic actions — public API ===========================================================
+
+    /**
+     * Bind the engine to the active meeting/mode. Called by IntelligenceManager
+     * at meeting start and on every mode switch. Re-binding clears the per-session
+     * action store (see ModeBleeding tests) so old-mode candidates do not leak.
+     */
+    setDynamicActionContext(params: {
+        sessionId: string;
+        modeId: string;
+        modeTemplateType: string;
+    }): void {
+        const { sessionId, modeId, modeTemplateType } = params;
+        if (!this.dynamicActionEngine) {
+            this.dynamicActionEngine = new DynamicActionEngine();
+        }
+        // If session changed, drop store so we don't bleed actions across meetings.
+        if (this.currentSessionId && this.currentSessionId !== sessionId) {
+            this.dynamicActionEngine = new DynamicActionEngine();
+        }
+        this.currentSessionId = sessionId;
+        this.currentDynamicActionModeId = modeId;
+        this.currentDynamicActionTemplateType = modeTemplateType;
+    }
+
+    clearDynamicActionContext(): void {
+        this.currentSessionId = null;
+        this.currentDynamicActionModeId = null;
+        this.currentDynamicActionTemplateType = null;
+        this.dynamicActionEngine = null;
+    }
+
+    acceptDynamicAction(actionId: string): DynamicAction | null {
+        if (!this.dynamicActionEngine) return null;
+        return this.dynamicActionEngine.acceptAction(actionId);
+    }
+
+    dismissDynamicAction(actionId: string): void {
+        if (!this.dynamicActionEngine) return;
+        this.dynamicActionEngine.dismissAction(actionId);
+    }
+
+    getActiveDynamicActions(): DynamicAction[] {
+        if (!this.dynamicActionEngine || !this.currentSessionId) return [];
+        return this.dynamicActionEngine.getTopActions(this.currentSessionId);
+    }
+
+    // For tests — injection seam.
+    _setDynamicActionEngineForTest(engine: DynamicActionEngine | null): void {
+        this.dynamicActionEngine = engine;
+    }
+
+    private detectAndEmitDynamicActions(segment: TranscriptSegment): void {
+        if (!this.dynamicActionEngine || !this.currentSessionId
+            || !this.currentDynamicActionModeId || !this.currentDynamicActionTemplateType) {
+            return;
+        }
+        const text = (segment.text || '').trim();
+        if (!text) return;
+
+        const newActions = this.dynamicActionEngine.detectActions({
+            transcript: text,
+            speaker: segment.speaker,
+            modeTemplateType: this.currentDynamicActionTemplateType,
+            modeId: this.currentDynamicActionModeId,
+            sessionId: this.currentSessionId,
+        });
+
+        // The store dedupes within the per-session store, so each emitted action
+        // is a *new* candidate — safe to forward to renderer for rendering.
+        for (const action of newActions) {
+            this.emit('dynamic_action_emitted', action);
+        }
+    }
+
     /**
      * Handle suggestion trigger from native audio service
      * This is the primary auto-trigger path
      */
     async handleSuggestionTrigger(trigger: SuggestionTrigger): Promise<void> {
-        if (trigger.confidence < 0.5) {
+        if (trigger.confidence < 0.5) return;
+
+        const plannerDecision = await this.planSuggestionTrigger(trigger);
+        if (plannerDecision.kind === 'silent') {
+            console.log('[IntelligenceEngine] Planner stayed silent', { reason: plannerDecision.reason, confidence: plannerDecision.confidence });
             return;
         }
+
+        if (plannerDecision.kind !== 'answer') {
+            await this.runPlannerDecision(plannerDecision, trigger.lastQuestion);
+            return;
+        }
+
+        // If a speculative stream answered (or is answering) this question, reuse it.
+        if (this.speculativeText !== null) {
+            const expired = Date.now() > this.speculativeTextExpiry;
+            const stale = expired || !trigger.lastQuestion; // empty question — reject conservatively
+            if (!stale) {
+                const similarity = IntelligenceEngine.jaccardSimilarity(this.speculativeText, trigger.lastQuestion);
+                this.speculativeText = null;
+                this.speculativeTextExpiry = Infinity;
+                if (similarity >= this.SPECULATIVE_SIMILARITY_THRESHOLD) {
+                    console.log(`[IntelligenceEngine] Speculative stream accepted (Jaccard=${similarity.toFixed(2)}) — continuing`);
+                    this.lastTriggerTime = Date.now();
+                    return;
+                }
+                console.log(`[IntelligenceEngine] Speculative stream rejected (Jaccard=${similarity.toFixed(2)}) — restarting`);
+            } else {
+                console.log(`[IntelligenceEngine] Speculative result discarded (expired=${expired}, noQuestion=${!trigger.lastQuestion})`);
+                this.speculativeText = null;
+                this.speculativeTextExpiry = Infinity;
+            }
+            // IMPORTANT: no await between this increment and runWhatShouldISay below —
+            // the increment must be synchronous with the new stream launch to preserve generation-id ordering.
+            ++this.currentGenerationId;
+        }
+
         await this.runWhatShouldISay(trigger.lastQuestion, trigger.confidence);
+    }
+
+    private async planSuggestionTrigger(trigger: SuggestionTrigger): Promise<PlannerDecision> {
+        const contextItems = this.session.getContext(180);
+        const transcriptContext = contextItems.map(item => item.text).join('\n');
+        const preparedTranscript = prepareTranscriptForWhatToAnswer(contextItems.map(item => ({
+            role: item.role,
+            text: item.text,
+            timestamp: item.timestamp,
+        })), 12);
+        const lastInterviewerTurn = this.session.getLastInterviewerTurn();
+        const intentResult = await classifyIntent(
+            lastInterviewerTurn,
+            preparedTranscript,
+            this.session.getAssistantResponseHistory().length
+        );
+        const detectedCodingQuestion = this.session.getDetectedCodingQuestion();
+
+        return planNextAssistantAction({
+            triggerQuestion: trigger.lastQuestion,
+            confidence: trigger.confidence,
+            transcriptContext,
+            intentResult,
+            hasRecentAssistantResponse: this.session.getAssistantResponseHistory().length > 0,
+            hasDetectedCodingQuestion: Boolean(detectedCodingQuestion.question),
+            now: Date.now(),
+            lastTriggerTime: this.lastTriggerTime,
+            cooldownMs: this.triggerCooldown,
+        });
+    }
+
+    private async runPlannerDecision(decision: PlannerDecision, question?: string): Promise<void> {
+        switch (decision.kind) {
+            case 'clarify':
+                await this.runClarify();
+                return;
+            case 'recap':
+                await this.runRecap();
+                return;
+            case 'follow_up_questions':
+                await this.runFollowUpQuestions();
+                return;
+            case 'brainstorm':
+                await this.runBrainstorm(undefined, question);
+                return;
+            case 'answer':
+            case 'silent':
+                return;
+        }
     }
 
     // ============================================
@@ -219,13 +503,14 @@ export class IntelligenceEngine extends EventEmitter {
      * Manual trigger - uses clean transcript pipeline for question inference
      * NEVER returns null - always provides a usable response
      */
-    async runWhatShouldISay(question?: string, confidence: number = 0.8, imagePaths?: string[]): Promise<string | null> {
+    async runWhatShouldISay(question?: string, confidence: number = 0.8, imagePaths?: string[], options?: { speculative?: boolean; skipCooldown?: boolean; screenContext?: ScreenContext; promptInstruction?: string; activeSkill?: { id: string; name: string; promptBlock: string } }): Promise<string | null> {
         const now = Date.now();
+        const isSpeculative = options?.speculative === true;
+        const skipCooldown = options?.skipCooldown === true;
 
-        // Bypass cooldown when the user explicitly attached images (capture-and-process intent).
-        // The cooldown exists to debounce auto-triggers, not explicit shortcuts with context.
+        // Cooldown bypass: explicit images (user intent), speculative pre-fetch, or test harness.
         const hasImages = imagePaths && imagePaths.length > 0;
-        if (!hasImages && now - this.lastTriggerTime < this.triggerCooldown) {
+        if (!hasImages && !isSpeculative && !skipCooldown && now - this.lastTriggerTime < this.triggerCooldown) {
             return null;
         }
 
@@ -235,16 +520,34 @@ export class IntelligenceEngine extends EventEmitter {
         }
 
         this.setMode('what_to_say');
-        this.lastTriggerTime = now;
+        // Speculative runs don't stamp lastTriggerTime at start — the cooldown slot
+        // is reserved for the real trigger. We stamp it only on successful completion.
+        if (!isSpeculative) {
+            this.lastTriggerTime = now;
+        }
+        // Record the question text so handleSuggestionTrigger can do Jaccard comparison.
+        // Expiry stays at Infinity while the stream is running — set to a close window only on completion.
+        if (isSpeculative) {
+            this.speculativeText = question ?? null;
+            this.speculativeTextExpiry = Infinity;
+        }
 
         try {
             if (!this.whatToAnswerLLM) {
                 if (!this.answerLLM) {
+                    if (isSpeculative) { this.speculativeText = null; this.speculativeTextExpiry = Infinity; }
                     this.setMode('idle');
                     return "Please configure your API Keys in Settings to use this feature.";
                 }
                 const context = this.session.getFormattedContext(180);
                 const answer = await this.answerLLM.generate(question || '', context);
+                if (isSpeculative) {
+                    this.speculativeText = null;
+                    this.speculativeTextExpiry = Infinity;
+                    this.lastTriggerTime = Date.now();
+                    this.setMode('idle');
+                    return answer || "Could you repeat that? I want to make sure I address your question properly.";
+                }
                 if (answer) {
                     this.session.addAssistantMessage(answer);
                     this.emit('suggested_answer', answer, question || 'inferred', confidence);
@@ -264,7 +567,7 @@ export class IntelligenceEngine extends EventEmitter {
                     (lastItem.text === lastInterim.text || Math.abs(lastItem.timestamp - lastInterim.timestamp) < 1000);
 
                 if (!isDuplicate) {
-                    console.log(`[IntelligenceEngine] Injecting interim transcript: "${lastInterim.text.substring(0, 50)}..."`);
+                    console.log(`[IntelligenceEngine] Injecting interim transcript`, { length: lastInterim.text.length });
                     contextItems.push({
                         role: 'interviewer',
                         text: lastInterim.text,
@@ -294,13 +597,21 @@ export class IntelligenceEngine extends EventEmitter {
                 this.session.getAssistantResponseHistory().length
             );
 
-            console.log(`[IntelligenceEngine] Temporal RAG: ${temporalContext.previousResponses.length} responses, tone: ${temporalContext.toneSignals[0]?.type || 'neutral'}, intent: ${intentResult.intent}${imagePaths?.length ? `, with ${imagePaths.length} image(s)` : ''}`);
+            const screenContext = options?.screenContext;
+            console.log('[IntelligenceEngine] Temporal RAG', {
+                previousResponses: temporalContext.previousResponses.length,
+                tone: temporalContext.toneSignals[0]?.type || 'neutral',
+                intent: intentResult.intent,
+                imageCount: imagePaths?.length || 0,
+                screenOcrAvailable: Boolean(screenContext?.ocrText),
+                screenOcrTextLength: screenContext?.ocrText?.length || 0,
+            });
 
             const generationId = ++this.currentGenerationId;
             let fullAnswer = "";
             // RC-03 fix: hold a reference to the generator so we can call .return()
             // to properly terminate the network request when a new generation starts.
-            const stream = this.whatToAnswerLLM.generateStream(preparedTranscript, temporalContext, intentResult, imagePaths);
+            const stream = this.whatToAnswerLLM.generateStream(preparedTranscript, temporalContext, intentResult, imagePaths, screenContext, options?.promptInstruction, options?.activeSkill);
             let streamAborted = false;
 
             for await (const token of stream) {
@@ -312,12 +623,18 @@ export class IntelligenceEngine extends EventEmitter {
                     streamAborted = true;
                     break;
                 }
-                this.emit('suggested_answer_token', token, question || 'inferred', confidence);
                 fullAnswer += token;
             }
 
             if (streamAborted) {
                 // Aborted mid-stream — don't update session or emit final event
+                if (isSpeculative) {
+                    this.speculativeText = null;
+                    this.speculativeTextExpiry = Infinity;
+                    // Stamp lastTriggerTime so the real trigger that caused this abort
+                    // doesn't allow a rapid second trigger within the cooldown window.
+                    this.lastTriggerTime = Date.now();
+                }
                 this.setMode('idle');
                 return null;
             }
@@ -326,6 +643,24 @@ export class IntelligenceEngine extends EventEmitter {
                 fullAnswer = "Could you repeat that? I want to make sure I address your question properly.";
             }
 
+            if (IntelligenceEngine.isNonAnswerSentinel(fullAnswer)) {
+                if (isSpeculative) {
+                    this.speculativeText = null;
+                    this.speculativeTextExpiry = Infinity;
+                    this.lastTriggerTime = Date.now();
+                }
+                this.setMode('idle');
+                return null;
+            }
+
+            if (isSpeculative) {
+                this.lastTriggerTime = Date.now();
+                this.speculativeTextExpiry = this.lastTriggerTime + this.triggerCooldown + 500;
+                this.setMode('idle');
+                return fullAnswer;
+            }
+
+            this.emit('suggested_answer_token', fullAnswer, question || 'inferred', confidence);
             this.session.addAssistantMessage(fullAnswer);
 
             this.session.pushUsage({
@@ -335,14 +670,13 @@ export class IntelligenceEngine extends EventEmitter {
                 answer: fullAnswer
             });
 
-            // CQ-05 fix: only emit the "complete" event after a non-aborted stream.
-            // The renderer already has all tokens — this is for metadata only (e.g. copying, history).
             this.emit('suggested_answer', fullAnswer, question || 'What to Answer', confidence);
 
             this.setMode('idle');
             return fullAnswer;
 
         } catch (error) {
+            if (isSpeculative) { this.speculativeText = null; this.speculativeTextExpiry = Infinity; }
             this.emit('error', error as Error, 'what_to_say');
             this.setMode('idle');
             return "Could you repeat that? I want to make sure I address your question properly.";
@@ -469,6 +803,11 @@ export class IntelligenceEngine extends EventEmitter {
             if (!streamAborted && fullSummary && this.currentGenerationId === generationId) {
                 this.emit('recap', fullSummary);
 
+                // Track recap as an assistant message so "make it shorter" / other
+                // refinements can target it via FollowUpLLM (which reads the last
+                // assistant message).
+                this.session.addAssistantMessage(fullSummary);
+
                 this.session.pushUsage({
                     type: 'chat',
                     timestamp: Date.now(),
@@ -577,14 +916,22 @@ export class IntelligenceEngine extends EventEmitter {
             const generationId = ++this.currentGenerationId;
             let fullQuestions = "";
             const stream = this.followUpQuestionsLLM.generateStream(context);
+            let streamAborted = false;
 
             for await (const token of stream) {
                 if (this.currentGenerationId !== generationId) {
                     console.log('[IntelligenceEngine] _follow_up_questions stream aborted by new generation');
+                    await stream.return(undefined);
+                    streamAborted = true;
                     break;
                 }
                 this.emit('follow_up_questions_token', token);
                 fullQuestions += token;
+            }
+
+            if (streamAborted) {
+                this.setMode('idle');
+                return null;
             }
 
             if (fullQuestions && this.currentGenerationId === generationId) {
@@ -692,13 +1039,22 @@ export class IntelligenceEngine extends EventEmitter {
                 transcriptContext ?? undefined
             );
 
+            let streamAborted = false;
+
             for await (const token of stream) {
                 if (this.currentGenerationId !== generationId) {
                     console.log('[IntelligenceEngine] code_hint stream aborted by new generation');
+                    await stream.return(undefined);
+                    streamAborted = true;
                     break;
                 }
                 this.emit('suggested_answer_token', token, 'Code Hint', 1.0);
                 fullHint += token;
+            }
+
+            if (streamAborted) {
+                this.setMode('idle');
+                return null;
             }
 
             if (!fullHint || fullHint.trim().length < 5) {
@@ -827,5 +1183,11 @@ export class IntelligenceEngine extends EventEmitter {
             this.assistCancellationToken.abort();
             this.assistCancellationToken = null;
         }
+        if (this.speculativeTimer !== null) {
+            clearTimeout(this.speculativeTimer);
+            this.speculativeTimer = null;
+        }
+        this.speculativeText = null;
+        this.speculativeTextExpiry = Infinity;
     }
 }

@@ -42,7 +42,13 @@ impl SpeakerStream {
     }
 }
 
-// Helper to find device by ID
+// LIMITATION: We currently only capture from the eMultimedia/eConsole default
+// render device (or a user-specified id). Many VoIP apps (Zoom, Teams, Discord,
+// Meet) route audio to the eCommunications default — which the user can configure
+// independently in Sound Settings. Loopback on the multimedia-default captures
+// nothing while the meeting plays through the comms-default device. Adding
+// eCommunications support requires raw windows-rs IMMDeviceEnumerator since
+// wasapi 0.13 has no Role API. Tracked for follow-up.
 fn find_device_by_id(direction: &Direction, device_id: &str) -> Option<wasapi::Device> {
     let collection = DeviceCollection::new(direction).ok()?;
     let count = collection.get_nbr_devices().ok()?;
@@ -79,13 +85,29 @@ pub fn list_output_devices() -> Result<Vec<(String, String)>> {
     Ok(list)
 }
 
+/// Returns the WASAPI device id of the current default render device on the
+/// eMultimedia/eConsole role, or empty string on failure. JS polls this so the
+/// SystemAudioCapture follows the user's output route when they switch
+/// devices mid-meeting. Note: this still doesn't track the eCommunications
+/// role separately (a known limitation tracked in find_device_by_id).
+pub fn default_output_device_uid() -> String {
+    match get_default_device(&Direction::Render) {
+        Ok(dev) => dev.get_id().unwrap_or_default(),
+        Err(_) => String::new(),
+    }
+}
+
 impl SpeakerInput {
     pub fn new(device_id: Option<String>) -> Result<Self> {
         let device_id = device_id.filter(|id| !id.is_empty() && id != "default");
         Ok(Self { device_id })
     }
 
-    pub fn stream(self) -> SpeakerStream {
+    /// Spawn the WASAPI capture thread and wait for it to report its real
+    /// sample rate. Returns Err if init fails or times out, so callers can
+    /// surface the failure to JS instead of silently degrading to a fake
+    /// stream that produces zero samples.
+    pub fn stream(self) -> Result<SpeakerStream> {
         let rb = HeapRb::<f32>::new(RING_BUFFER_SAMPLES);
         let (producer, consumer) = rb.split();
 
@@ -112,22 +134,33 @@ impl SpeakerInput {
         let actual_sample_rate = match init_rx.recv_timeout(Duration::from_secs(5)) {
             Ok(Ok(rate)) => rate,
             Ok(Err(e)) => {
-                error!("Audio initialization failed: {}", e);
-                44100
+                // Init failed. Tear down the thread we just spawned (it'll exit
+                // on its own since capture_audio_loop already returned), then
+                // bubble the error up to lib.rs which calls tsfn.call(Err(...)).
+                if let Ok(mut state) = waker_state.lock() {
+                    state.shutdown = true;
+                }
+                let _ = capture_thread.join();
+                return Err(anyhow::anyhow!("WASAPI init failed: {}", e));
             }
             Err(_) => {
-                error!("Audio initialization timeout");
-                44100
+                if let Ok(mut state) = waker_state.lock() {
+                    state.shutdown = true;
+                }
+                let _ = capture_thread.join();
+                return Err(anyhow::anyhow!(
+                    "WASAPI init timed out after 5s (no default render device, or device busy in exclusive mode)"
+                ));
             }
         };
 
-        SpeakerStream {
+        Ok(SpeakerStream {
             consumer: Some(consumer),
             waker_state,
             capture_thread: Some(capture_thread),
             actual_sample_rate,
             data_ready,
-        }
+        })
     }
 
     fn capture_audio_loop(
@@ -138,16 +171,20 @@ impl SpeakerInput {
         device_id: Option<String>,
     ) -> Result<()> {
         let init_result = (|| -> Result<_> {
-            let device = match device_id {
-                Some(ref id) => match find_device_by_id(&Direction::Render, id) {
+            // Resolve target render device. If the saved device_id is stale
+            // (unplugged, renamed, fresh install with leftover settings) we
+            // must NOT panic — fall through to the default. If even that
+            // errors, propagate via ? so init_tx surfaces the failure to JS
+            // instead of letting the thread die silently and leaving callers
+            // with a fake 44100Hz stream that never produces samples.
+            let device = match device_id.as_deref() {
+                Some(id) if !id.is_empty() => match find_device_by_id(&Direction::Render, id) {
                     Some(d) => d,
                     None => get_default_device(&Direction::Render)
-                        .map_err(|e| anyhow::anyhow!("{}", e))
-                        .expect("No default render device"),
+                        .map_err(|e| anyhow::anyhow!("device '{}' not found and default lookup failed: {}", id, e))?,
                 },
-                None => {
-                    get_default_device(&Direction::Render).map_err(|e| anyhow::anyhow!("{}", e))?
-                }
+                _ => get_default_device(&Direction::Render)
+                    .map_err(|e| anyhow::anyhow!("default render device unavailable: {}", e))?,
             };
 
             let mut audio_client = device

@@ -16,6 +16,9 @@ export interface ShortcutConfig {
     recap: string[];
     scrollUp: string[];
     scrollDown: string[];
+    scrollLeft: string[];
+    scrollRight: string[];
+    focusInput: string[];
     // Window Movement
     moveWindowUp: string[];
     moveWindowDown: string[];
@@ -45,8 +48,11 @@ function buildDefaultShortcuts(): ShortcutConfig {
         brainstorm: [mod, '7'],
         shorten: [],
         recap: [],
-        scrollUp: ['↑'],
-        scrollDown: ['↓'],
+        scrollUp: [mod, '↑'],
+        scrollDown: [mod, '↓'],
+        scrollLeft: [mod, isMac ? '⌥' : 'Alt', '←'],
+        scrollRight: [mod, isMac ? '⌥' : 'Alt', '→'],
+        focusInput: [mod, shift, 'Space'],
         moveWindowUp: [mod, shift, '↑'],
         moveWindowDown: [mod, shift, '↓'],
         moveWindowLeft: [mod, shift, '←'],
@@ -61,31 +67,19 @@ function buildDefaultShortcuts(): ShortcutConfig {
     };
 }
 
-export const DEFAULT_SHORTCUTS: ShortcutConfig = {
-    whatToAnswer: ['⌘', '1'],
-    autoAnswerMode: ['⌘', 'F'],
-    clarify: ['⌘', '2'],
-    dynamicAction4: ['⌘', '3'],   // slot 3 — matches KeybindManager
-    followUp: ['⌘', '4'],          // slot 4 — matches KeybindManager
-    answer: ['⌘', '5'],
-    codeHint: ['⌘', '6'],
-    brainstorm: ['⌘', '7'],
-    shorten: [],
-    recap: [],
-    scrollUp: ['↑'],
-    scrollDown: ['↓'],
-    moveWindowUp: ['⌘', '⇧', '↑'],
-    moveWindowDown: ['⌘', '⇧', '↓'],
-    moveWindowLeft: ['⌘', '⇧', '←'],
-    moveWindowRight: ['⌘', '⇧', '→'],
-    toggleVisibility: ['⌘', 'B'],
-    toggleMousePassthrough: ['⌘', '⇧', 'B'],
-    processScreenshots: ['⌘', 'Enter'],
-    captureAndProcess: ['⌘', '⇧', 'Enter'],
-    resetCancel: ['⌘', 'R'],
-    takeScreenshot: ['⌘', 'H'],
-    selectiveScreenshot: ['⌘', '⇧', 'H']
-};
+/**
+ * Platform-aware default shortcuts. Computed once at module load using the
+ * current process platform — same source of truth as `buildDefaultShortcuts()`
+ * below, which is the actual hook initializer. Kept as a named export so
+ * consumers that need the defaults synchronously (without invoking the hook)
+ * don't see Mac glyphs on Windows.
+ *
+ * Historical note: this export was previously hardcoded to '⌘'/'⌥'/'⇧'
+ * literals, which would surface Mac symbols in any Windows surface that
+ * consumed it directly. Replacing the literal with `buildDefaultShortcuts()`
+ * keeps the two code paths consistent.
+ */
+export const DEFAULT_SHORTCUTS: ShortcutConfig = buildDefaultShortcuts();
 
 export const useShortcuts = () => {
     // Initialize state with platform-aware defaults
@@ -113,6 +107,9 @@ export const useShortcuts = () => {
                 else if (kb.id === 'chat:recap') newShortcuts.recap = keys;
                 else if (kb.id === 'chat:scrollUp') newShortcuts.scrollUp = keys;
                 else if (kb.id === 'chat:scrollDown') newShortcuts.scrollDown = keys;
+                else if (kb.id === 'chat:scrollLeft') newShortcuts.scrollLeft = keys;
+                else if (kb.id === 'chat:scrollRight') newShortcuts.scrollRight = keys;
+                else if (kb.id === 'chat:focusInput') newShortcuts.focusInput = keys;
                 else if (kb.id === 'chat:auto-answer-mode') newShortcuts.autoAnswerMode = keys;
                 // Window
                 else if (kb.id === 'window:move-up') newShortcuts.moveWindowUp = keys;
@@ -176,6 +173,9 @@ export const useShortcuts = () => {
             case 'recap': backendId = 'chat:recap'; break;
             case 'scrollUp': backendId = 'chat:scrollUp'; break;
             case 'scrollDown': backendId = 'chat:scrollDown'; break;
+            case 'scrollLeft': backendId = 'chat:scrollLeft'; break;
+            case 'scrollRight': backendId = 'chat:scrollRight'; break;
+            case 'focusInput': backendId = 'chat:focusInput'; break;
             // Window
             case 'moveWindowUp': backendId = 'window:move-up'; break;
             case 'moveWindowDown': backendId = 'window:move-down'; break;
