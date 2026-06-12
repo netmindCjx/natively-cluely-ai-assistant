@@ -3,7 +3,7 @@
 // Rates are USD per 1M tokens (LLM) or USD per minute (STT).
 // Update when providers change pricing.
 
-export type LLMProvider = 'openai' | 'anthropic' | 'groq' | 'gemini' | 'ollama' | 'natively' | 'custom';
+export type LLMProvider = 'openai' | 'anthropic' | 'groq' | 'gemini' | 'ollama' | 'custom';
 export type STTProvider = 'whisper' | 'deepgram' | 'soniox' | 'elevenlabs' | 'google';
 
 interface LLMRate {
@@ -14,7 +14,8 @@ interface LLMRate {
 
 const LLM_RATES: Record<string, LLMRate> = {
     // OpenAI
-    'gpt-5.4': { inputPer1M: 1.25, outputPer1M: 10.0 },
+    // Netmind pricing not yet entered — placeholder copied from gpt-5.5; update with real rates.
+    'deepseek-ai/DeepSeek-V4-Flash': { inputPer1M: 1.25, outputPer1M: 10.0 },
     'gpt-4o': { inputPer1M: 2.5, outputPer1M: 10.0 },
     'gpt-4o-mini': { inputPer1M: 0.15, outputPer1M: 0.6 },
     'gpt-4-turbo': { inputPer1M: 10.0, outputPer1M: 30.0 },

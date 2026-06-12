@@ -596,8 +596,7 @@ const MockProviderSelectionAnim = () => {
     }, []);
 
     const options = [
-        { id: 'natively', label: 'Natively API', badge: '', recommended: true, desc: 'Ultra-fast low latency transcription', color: 'indigo', icon: <img src={nativelyIcon} className={`w-[14px] h-[14px] object-contain opacity-80 ${isLight ? '' : 'filter brightness-0 invert'}`} alt="Natively"/> },
-        { id: 'deepgram', label: 'Deepgram Nova-3', badge: 'Saved', recommended: false, desc: 'High-accuracy REST transcription', color: 'purple', icon: <Mic size={14} /> },
+        { id: 'deepgram', label: 'Deepgram Nova-3', badge: 'Saved', recommended: true, desc: 'High-accuracy REST transcription', color: 'purple', icon: <Mic size={14} /> },
         { id: 'google', label: 'Google Cloud', badge: 'Saved', recommended: false, desc: 'gRPC streaming via Service Account', color: 'blue', icon: <Mic size={14} /> },
         { id: 'groq', label: 'Groq Whisper', badge: '', recommended: false, desc: 'Fast LPU whisper transcription', color: 'orange', icon: <Mic size={14} /> },
         { id: 'azure', label: 'Azure Speech', badge: '', recommended: false, desc: 'Enterprise tier transcription', color: 'teal', icon: <Mic size={14} /> },
@@ -876,7 +875,7 @@ const SetupGuide = () => {
         </div>
     );
 };
-export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ({ onNavigate }) => {
+export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = () => {
     const { shortcuts } = useShortcuts();
     const isLight = useResolvedTheme() === 'light';
     
@@ -896,28 +895,6 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ({
             </div>
 
             <div className="flex-1 space-y-2">
-                
-                {onNavigate && (
-                    <div 
-                        onClick={() => onNavigate('natively-api')}
-                        className="mb-8 group cursor-pointer bg-bg-card hover:bg-bg-item-surface border border-border-subtle hover:border-white transition-all rounded-2xl flex items-center justify-between p-4 px-5 shadow-sm hover:shadow-md"
-                    >
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 flex-1">
-                            <div className="w-10 h-10 shrink-0 rounded-xl bg-bg-item-surface border border-border-subtle flex items-center justify-center group-hover:bg-bg-elevated transition-colors">
-                                <Zap className="w-5 h-5 text-text-primary group-hover:text-white transition-colors" fill="currentColor" />
-                            </div>
-                            <div className="flex-1">
-                                <h4 className="text-[14px] font-bold text-text-primary mb-0.5">Want to skip the manual setup?</h4>
-                                <p className="text-[13px] text-text-secondary">
-                                    Use the <span className="font-semibold text-text-primary">Natively API</span> for an out-of-the-box experience. One-click zero-configuration usage.
-                                </p>
-                            </div>
-                        </div>
-                        <div className="hidden sm:flex self-center ml-4 px-3 py-1.5 rounded-lg bg-text-primary text-bg-main text-[11px] font-bold items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity whitespace-nowrap shrink-0">
-                            Enable Now <ArrowRight size={12} />
-                        </div>
-                    </div>
-                )}
 
                 <SetupGuide />
 
@@ -1118,7 +1095,7 @@ export const HelpSettings: React.FC<{ onNavigate?: (tab: string) => void }> = ({
                                          </span>
                                          <button onClick={() => { (window as any).electronAPI?.openExternal('https://platform.openai.com/api-keys') }} className="text-accent-primary hover:underline text-[10px] flex items-center gap-1"><ExternalLink size={10} /> Get Key</button>
                                      </h5>
-                                     <p className="text-[11px] opacity-80 mb-2">Industry standard pipeline. Default models: <strong>gpt-5.4-mini</strong> & <strong>gpt-5.4</strong>.</p>
+                                     <p className="text-[11px] opacity-80 mb-2">Industry standard pipeline. Chat routed via Netmind: <strong>deepseek-ai/DeepSeek-V4-Flash</strong>. STT / embeddings still use OpenAI.</p>
                                      <span className={kbdClass}>sk-proj-...</span>
                                  </div>
                                  <div className="p-3 rounded-xl border bg-bg-item-surface border-border-subtle hover:border-border-muted transition-colors">

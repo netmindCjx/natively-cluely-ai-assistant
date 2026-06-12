@@ -14,9 +14,9 @@ export const STANDARD_CLOUD_MODELS: Record<string, {
     },
     openai: {
         hasKeyCheck: (creds) => !!creds?.hasOpenaiKey,
-        ids: ['gpt-5.4'],
-        names: ['GPT 5.4'],
-        descs: ['OpenAI'],
+        ids: ['deepseek-ai/DeepSeek-V4-Flash'],
+        names: ['DeepSeek V4 Flash'],
+        descs: ['Netmind • DeepSeek'],
         pmKey: 'openaiPreferredModel'
     },
     claude: {

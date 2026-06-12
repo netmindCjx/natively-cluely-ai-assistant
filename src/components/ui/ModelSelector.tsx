@@ -51,9 +51,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ currentModel, onSe
                 const creds = await window.electronAPI?.getStoredCredentials?.();
                 const cModels: { id: string; name: string; desc: string; provider: string }[] = [];
 
-                if (creds?.hasNativelyKey) {
-                    cModels.push({ id: 'natively', name: 'Natively API', desc: 'Managed AI • Fast execution', provider: 'natively' });
-                }
                 for (const [prov, cfg] of Object.entries(STANDARD_CLOUD_MODELS)) {
                     if (!cfg.hasKeyCheck(creds)) continue;
                     cfg.ids.forEach((id, i) => cModels.push({ id, name: cfg.names[i], desc: cfg.descs[i], provider: prov }));
@@ -87,7 +84,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ currentModel, onSe
         if (model === 'gemini-3.1-flash-lite-preview') return 'Gemini 3.1 Flash';
         if (model === 'gemini-3.1-pro-preview') return 'Gemini 3.1 Pro';
         if (model === 'llama-3.3-70b-versatile') return 'Groq Llama 3.3';
-        if (model === 'gpt-5.4') return 'GPT 5.4';
+        if (model === 'deepseek-ai/DeepSeek-V4-Flash') return 'DeepSeek V4 Flash';
         if (model === 'claude-sonnet-4-6') return 'Sonnet 4.6';
 
         // Check dynamic cloud models
