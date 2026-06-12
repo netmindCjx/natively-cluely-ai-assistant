@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     Github, Twitter, Shield, Cpu, Database,
     Heart, Linkedin, Instagram, Mail, MicOff, Star, Bug, Globe, Sparkles, Zap, Camera, LayoutGrid, User
@@ -10,6 +11,7 @@ import { getPlatformShortcut } from '../utils/platformUtils';
 interface AboutSectionProps { }
 
 export const AboutSection: React.FC<AboutSectionProps> = () => {
+    const { t } = useTranslation();
     const isLight = useResolvedTheme() === 'light';
     const donationClickTimeRef = useRef<number | null>(null);
 
@@ -58,13 +60,13 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
         <div className="space-y-6 animated fadeIn pb-10">
             {/* Header */}
             <div>
-                <h3 className="text-lg font-bold text-text-primary mb-1">About Natively</h3>
-                <p className="text-sm text-text-secondary">Designed to be invisible, intelligent, and trusted.</p>
+                <h3 className="text-lg font-bold text-text-primary mb-1">{t('about.title')}</h3>
+                <p className="text-sm text-text-secondary">{t('about.tagline')}</p>
             </div>
 
             {/* What's New Section */}
             <div>
-                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">What's New in v2.5</h4>
+                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">{t('about.whatsNew')}</h4>
                 <div className="bg-bg-item-surface rounded-xl border border-border-subtle overflow-hidden">
                     <div className="p-3 border-b border-border-subtle bg-bg-card/50">
                         <div className="flex items-start gap-4">
@@ -72,9 +74,9 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                 <LayoutGrid size={20} />
                             </div>
                             <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Modes Manager</h5>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">{t('about.modesManager')}</h5>
                                 <p className="text-xs text-text-secondary leading-relaxed">
-                                    Seven specialized AI personas — Interview, Sales, Recruiting, Team Meet, Lecture, Technical, and General. Each mode injects a tailored system prompt, reference files, and smart note sections into every response.
+                                    {t('about.modesManagerDescription')}
                                 </p>
                             </div>
                         </div>
@@ -86,9 +88,9 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                 <User size={20} />
                             </div>
                             <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Custom Context in Profile Intelligence</h5>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">{t('about.customContext')}</h5>
                                 <p className="text-xs text-text-secondary leading-relaxed">
-                                    A free-form textarea in Profile Intelligence lets you inject any personal context — sales stats, product notes, LeetCode patterns, preferences — into every AI call as a structured block. Auto-saves as you type.
+                                    {t('about.customContextDescription')}
                                 </p>
                             </div>
                         </div>
@@ -100,9 +102,9 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                 <Shield size={20} />
                             </div>
                             <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Real-Time Pro License Sync</h5>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">{t('about.realTimePro')}</h5>
                                 <p className="text-xs text-text-secondary leading-relaxed">
-                                    Pro feature gates (Modes, Profile Intelligence) now update instantly when you activate or deactivate a license — no restart needed. Active mode is automatically cleared on license loss.
+                                    {t('about.realTimeProDescription')}
                                 </p>
                             </div>
                         </div>
@@ -114,9 +116,9 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                 <Zap size={20} />
                             </div>
                             <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">STT Stability & Resilience</h5>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">{t('about.sttStability')}</h5>
                                 <p className="text-xs text-text-secondary leading-relaxed">
-                                    Deepgram reconnect storms are now prevented via exponential backoff and connection staggering. Server-side key pooling supports up to 6 Deepgram and ElevenLabs keys with automatic rotation on failure.
+                                    {t('about.sttStabilityDescription')}
                                 </p>
                             </div>
                         </div>
@@ -126,7 +128,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
 
             {/* Architecture Section */}
             <div>
-                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">How Natively Works</h4>
+                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">{t('about.howItWorks')}</h4>
                 <div className="bg-bg-item-surface rounded-xl border border-border-subtle overflow-hidden">
                     <div className="p-3 border-b border-border-subtle bg-bg-card/50">
                         <div className="flex items-start gap-4">
@@ -134,9 +136,9 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                 <Cpu size={20} />
                             </div>
                             <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Hybrid Intelligence</h5>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">{t('about.hybridIntelligence')}</h5>
                                 <p className="text-xs text-text-secondary leading-relaxed">
-                                    Seamlessly routes queries between ultra-fast models for instant speed and reasoning models (Gemini, OpenAI, Claude) for complex tasks. Powered by enterprise-grade speech recognition from 7+ providers.
+                                    {t('about.hybridIntelligenceDescription')}
                                 </p>
                             </div>
                         </div>
@@ -148,9 +150,9 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                 <Database size={20} />
                             </div>
                             <div>
-                                <h5 className="text-sm font-bold text-text-primary mb-1">Local RAG & Memory</h5>
+                                <h5 className="text-sm font-bold text-text-primary mb-1">{t('about.localRag')}</h5>
                                 <p className="text-xs text-text-secondary leading-relaxed">
-                                    A purely local vector memory system allows Natively to recall details from past meetings. Embeddings and retrieval happen on-device via SQLite for maximum privacy.
+                                    {t('about.localRagDescription')}
                                 </p>
                             </div>
                         </div>
@@ -160,23 +162,23 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
 
             {/* Privacy Section */}
             <div>
-                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">Privacy & Data</h4>
+                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">{t('about.privacyData')}</h4>
                 <div className="bg-bg-item-surface rounded-xl border border-border-subtle p-5 space-y-4">
                     <div className="flex items-start gap-3">
                         <Shield size={16} className="text-green-400 mt-0.5" />
                         <div>
-                            <h5 className="text-sm font-medium text-text-primary">Stealth & Control</h5>
+                            <h5 className="text-sm font-medium text-text-primary">{t('about.stealthControl')}</h5>
                             <p className="text-xs text-text-secondary mt-1 leading-relaxed">
-                                Features "Undetectable Mode" to hide from the dock and "Masquerading" to disguise as system apps. You control exactly what data leaves your device.
+                                {t('about.stealthControlDescription')}
                             </p>
                         </div>
                     </div>
                     <div className="flex items-start gap-3">
                         <MicOff size={16} className="text-red-500 mt-0.5" />
                         <div>
-                            <h5 className="text-sm font-medium text-text-primary">No Recording</h5>
+                            <h5 className="text-sm font-medium text-text-primary">{t('about.noRecording')}</h5>
                             <p className="text-xs text-text-secondary mt-1 leading-relaxed">
-                                Natively listens only when active. It does not record video, take arbitrary screenshots without command, or perform background surveillance.
+                                {t('about.noRecordingDescription')}
                             </p>
                         </div>
                     </div>
@@ -189,7 +191,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
 
             {/* Community Section */}
             <div>
-                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">Community</h4>
+                <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-2 px-1">{t('about.community')}</h4>
                 <div className="space-y-4">
                     {/* 0. Official Website */}
                     <div className="bg-bg-item-surface rounded-xl border border-border-subtle p-5 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -198,7 +200,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                 <Globe size={18} className="opacity-80" />
                             </div>
                             <div>
-                                <h5 className="text-sm font-bold text-text-primary">Official Website</h5>
+                                <h5 className="text-sm font-bold text-text-primary">{t('about.officialWebsite')}</h5>
                             </div>
                         </div>
                         <a
@@ -207,7 +209,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                             className="whitespace-nowrap px-4 py-2 bg-text-primary hover:bg-white/90 text-bg-main text-xs font-bold rounded-lg transition-all shadow hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-2"
                         >
                             <Globe size={14} />
-                            Visit Website
+                            {t('about.visitWebsite')}
                         </a>
                     </div>
 
@@ -221,12 +223,12 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                 <div className="pt-0.5">
                                     <div className="flex items-center gap-2 mb-1">
                                         <h5 className="text-sm font-bold text-text-primary">Evin John</h5>
-                                        <span className={`text-[10px] font-medium px-1.5 py-[1px] rounded-full ${isLight ? 'bg-amber-100 text-amber-700 border border-amber-300' : 'bg-yellow-400/10 text-yellow-200 border border-yellow-400/5'}`}>Creator</span>
+                                        <span className={`text-[10px] font-medium px-1.5 py-[1px] rounded-full ${isLight ? 'bg-amber-100 text-amber-700 border border-amber-300' : 'bg-yellow-400/10 text-yellow-200 border border-yellow-400/5'}`}>{t('about.creator')}</span>
                                     </div>
                                     <p className="text-xs text-text-secondary leading-relaxed max-w-lg">
-                                        I build software that stays out of the way.
+                                        {t('about.founderBio1')}
                                         <br />
-                                        <span className="font-bold text-text-primary">Natively</span> is made to feel fast, quiet, and respectful of your privacy.
+                                        <span className="font-bold text-text-primary">Natively</span> {t('about.founderBio2')}
                                     </p>
                                 </div>
                             </div>
@@ -235,7 +237,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                     href="https://github.com/Natively-AI-assistant/natively-cluely-ai-assistant"
                                     onClick={(e) => handleOpenLink(e, "https://github.com/Natively-AI-assistant/natively-cluely-ai-assistant")}
                                     className="text-text-tertiary hover:text-text-primary transition-colors"
-                                    title="GitHub"
+                                    title={t('about.github')}
                                 >
                                     <Github size={18} />
                                 </a>
@@ -243,7 +245,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                     href="https://x.com/evinjohnn"
                                     onClick={(e) => handleOpenLink(e, "https://x.com/evinjohnn")}
                                     className="text-text-tertiary hover:text-text-primary transition-colors"
-                                    title="Twitter"
+                                    title={t('about.twitter')}
                                 >
                                     <Twitter size={18} />
                                 </a>
@@ -251,7 +253,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                     href="https://www.linkedin.com/in/evinjohn"
                                     onClick={(e) => handleOpenLink(e, "https://www.linkedin.com/in/evinjohn")}
                                     className="text-text-tertiary hover:text-text-primary transition-colors"
-                                    title="LinkedIn"
+                                    title={t('about.linkedin')}
                                 >
                                     <Linkedin size={18} />
                                 </a>
@@ -259,7 +261,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                     href="https://www.instagram.com/evinjohnn/"
                                     onClick={(e) => handleOpenLink(e, "https://www.instagram.com/evinjohnn/")}
                                     className="text-text-tertiary hover:text-text-primary transition-colors"
-                                    title="Instagram"
+                                    title={t('about.instagram')}
                                 >
                                     <Instagram size={18} />
                                 </a>
@@ -278,8 +280,8 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                 <Star size={20} className="transition-all group-hover:fill-current" />
                             </div>
                             <div>
-                                <h5 className="text-sm font-bold text-text-primary">Star on GitHub</h5>
-                                <p className="text-xs text-text-secondary mt-0.5">Love Natively? Support us by starring the repo.</p>
+                                <h5 className="text-sm font-bold text-text-primary">{t('about.starOnGithub')}</h5>
+                                <p className="text-xs text-text-secondary mt-0.5">{t('about.starOnGithubDescription')}</p>
                             </div>
                         </a>
 
@@ -292,8 +294,8 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                 <Bug size={20} />
                             </div>
                             <div>
-                                <h5 className="text-sm font-bold text-text-primary">Report an Issue</h5>
-                                <p className="text-xs text-text-secondary mt-0.5">Found a bug? Let us know so we can fix it.</p>
+                                <h5 className="text-sm font-bold text-text-primary">{t('about.reportIssue')}</h5>
+                                <p className="text-xs text-text-secondary mt-0.5">{t('about.reportIssueDescription')}</p>
                             </div>
                         </a>
                     </div>
@@ -305,8 +307,8 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                 <Mail size={18} className="opacity-80" />
                             </div>
                             <div>
-                                <h5 className="text-sm font-bold text-text-primary">Get in Touch</h5>
-                                <p className="text-xs text-text-secondary mt-0.5">Open for professional collaborations and job offers.</p>
+                                <h5 className="text-sm font-bold text-text-primary">{t('about.getInTouch')}</h5>
+                                <p className="text-xs text-text-secondary mt-0.5">{t('about.getInTouchDescription')}</p>
                             </div>
                         </div>
                         <a
@@ -315,7 +317,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                             className="whitespace-nowrap px-4 py-2 bg-text-primary hover:bg-white/90 text-bg-main text-xs font-bold rounded-lg transition-all shadow hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-2"
                         >
                             <Mail size={14} />
-                            Contact Me
+                            {t('about.contactMe')}
                         </a>
                     </div>
 
@@ -326,8 +328,8 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                                 <Heart size={18} fill="currentColor" className="opacity-80" />
                             </div>
                             <div>
-                                <h5 className="text-sm font-bold text-text-primary">Support Development</h5>
-                                <p className="text-xs text-text-secondary mt-0.5">Natively is independent open-source software.</p>
+                                <h5 className="text-sm font-bold text-text-primary">{t('about.supportDevelopment')}</h5>
+                                <p className="text-xs text-text-secondary mt-0.5">{t('about.supportDevelopmentDescription')}</p>
                             </div>
                         </div>
                         <a
@@ -335,7 +337,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
                             onClick={(e) => handleOpenLink(e, "https://buymeacoffee.com/evinjohnn")}
                             className="whitespace-nowrap px-4 py-2 bg-text-primary hover:bg-white/90 text-bg-main text-xs font-bold rounded-lg transition-all shadow hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0"
                         >
-                            Support Project
+                            {t('about.supportProject')}
                         </a>
                     </div>
                 </div>
@@ -344,7 +346,7 @@ export const AboutSection: React.FC<AboutSectionProps> = () => {
             {/* Credits */}
             <div className="pt-4 border-t border-border-subtle">
                 <div>
-                    <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-3">Core Technology</h4>
+                    <h4 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-3">{t('about.coreTechnology')}</h4>
                     <div className="flex flex-wrap gap-2">
                         {['Groq', 'Gemini', 'OpenAI', 'Deepgram', 'ElevenLabs', 'Electron', 'React', 'Rust', 'Sharp', 'TypeScript', 'Tailwind CSS', 'Vite', 'Google Cloud', 'SQLite'].map(tech => (
                             <span key={tech} className="px-2.5 py-1 rounded-md bg-bg-input border border-border-subtle text-[11px] font-medium text-text-secondary">
