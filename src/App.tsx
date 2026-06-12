@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react" // forcing refresh
+import { useTranslation } from 'react-i18next';
 import { QueryClient, QueryClientProvider } from "react-query"
 import { ToastProvider, ToastViewport } from "./components/ui/toast"
 import NativelyInterface from "./components/NativelyInterface"
@@ -29,6 +30,7 @@ import ModesSettings from "./components/settings/ModesSettings"
 const queryClient = new QueryClient()
 
 const App: React.FC = () => {
+  const { t } = useTranslation();
   const isSettingsWindow = new URLSearchParams(window.location.search).get('window') === 'settings';
   const isLauncherWindow = new URLSearchParams(window.location.search).get('window') === 'launcher';
   const isOverlayWindow = new URLSearchParams(window.location.search).get('window') === 'overlay';
@@ -207,12 +209,12 @@ const App: React.FC = () => {
       removeProgress = window.electronAPI.onOllamaPullProgress((data) => {
         setOllamaPullStatus('downloading');
         setOllamaPullPercent(data.percent || 0);
-        setOllamaPullMessage(data.status || 'Downloading...');
+        setOllamaPullMessage(data.status || t('app.downloadingDefault'));
       });
 
       removeComplete = window.electronAPI.onOllamaPullComplete(() => {
         setOllamaPullStatus('complete');
-        setOllamaPullMessage('Local AI memory ready');
+        setOllamaPullMessage(t('app.localAiMemoryReady'));
         setOllamaPullPercent(100);
         setTimeout(() => setOllamaPullStatus('idle'), 3000);
       });
@@ -484,24 +486,24 @@ const App: React.FC = () => {
               <div className="flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-[#ff3333] shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="text-[#E0E0E0] font-medium text-sm">Provider Changed</h3>
+                  <h3 className="text-[#E0E0E0] font-medium text-sm">{t('app.providerChanged')}</h3>
                   <p className="text-[#A0A0A0] text-xs mt-1 leading-relaxed">
-                    ⚠ {incompatibleWarning.count} meetings used your previous AI provider ({incompatibleWarning.oldProvider}) and won't appear in search results under {incompatibleWarning.newProvider}.
+                    {t('app.providerChangedMessage', { count: incompatibleWarning.count, oldProvider: incompatibleWarning.oldProvider, newProvider: incompatibleWarning.newProvider })}
                   </p>
                 </div>
               </div>
               <div className="flex gap-2 mt-1 justify-end">
-                <button 
+                <button
                   onClick={() => setIncompatibleWarning(null)}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium text-[#A0A0A0] hover:text-white hover:bg-white/5 transition-colors"
                 >
-                  Dismiss
+                  {t('common.dismiss')}
                 </button>
-                <button 
+                <button
                   onClick={handleReindex}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#ff3333]/10 text-[#ff3333] hover:bg-[#ff3333]/20 transition-colors"
                 >
-                  Re-index automatically
+                  {t('app.reindexAutomatically')}
                 </button>
               </div>
             </div>

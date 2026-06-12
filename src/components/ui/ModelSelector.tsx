@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, Check, Cloud, Terminal, Monitor, Server, Plus } from 'lucide-react';
 import { STANDARD_CLOUD_MODELS, prettifyModelId } from '../../utils/modelUtils';
 
@@ -14,6 +15,7 @@ interface CustomProvider {
 }
 
 export const ModelSelector: React.FC<ModelSelectorProps> = ({ currentModel, onSelectModel }) => {
+    const { t } = useTranslation();
     const [isOpen, setIsOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'cloud' | 'custom' | 'local'>('cloud');
     const [ollamaModels, setOllamaModels] = useState<string[]>([]);
@@ -56,7 +58,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ currentModel, onSe
                     cfg.ids.forEach((id, i) => cModels.push({ id, name: cfg.names[i], desc: cfg.descs[i], provider: prov }));
                     const pm = creds?.[cfg.pmKey];
                     if (pm && !cfg.ids.includes(pm)) {
-                        cModels.push({ id: pm, name: prettifyModelId(pm), desc: `${prov.charAt(0).toUpperCase() + prov.slice(1)} • Preferred`, provider: prov });
+                        cModels.push({ id: pm, name: prettifyModelId(pm), desc: t('modelSelector.preferredSuffix', { provider: prov.charAt(0).toUpperCase() + prov.slice(1) }), provider: prov });
                     }
                 }
                 setCloudModels(cModels);
@@ -116,19 +118,19 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ currentModel, onSe
                             onClick={() => setActiveTab('cloud')}
                             className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${activeTab === 'cloud' ? 'text-accent-primary bg-bg-item-surface border-t-2 border-t-accent-primary' : 'text-text-secondary hover:text-text-primary'}`}
                         >
-                            Cloud
+                            {t('modelSelector.cloud')}
                         </button>
                         <button
                             onClick={() => setActiveTab('custom')}
                             className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${activeTab === 'custom' ? 'text-accent-primary bg-bg-item-surface border-t-2 border-t-accent-primary' : 'text-text-secondary hover:text-text-primary'}`}
                         >
-                            Custom
+                            {t('modelSelector.custom')}
                         </button>
                         <button
                             onClick={() => setActiveTab('local')}
                             className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-wider transition-colors ${activeTab === 'local' ? 'text-accent-primary bg-bg-item-surface border-t-2 border-t-accent-primary' : 'text-text-secondary hover:text-text-primary'}`}
                         >
-                            Local
+                            {t('modelSelector.local')}
                         </button>
                     </div>
 
@@ -140,8 +142,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ currentModel, onSe
                             <div className="space-y-1">
                                 {cloudModels.length === 0 ? (
                                     <div className="text-center py-6 text-text-tertiary">
-                                        <p className="text-xs mb-2">No cloud providers configured.</p>
-                                        <p className="text-[10px] opacity-70">Add API keys in Settings.</p>
+                                        <p className="text-xs mb-2">{t('modelSelector.noCloudProviders')}</p>
+                                        <p className="text-[10px] opacity-70">{t('modelSelector.addApiKeys')}</p>
                                     </div>
                                 ) : (
                                     cloudModels.map((m, idx) => {
@@ -171,8 +173,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ currentModel, onSe
                             <div className="space-y-1">
                                 {customProviders.length === 0 ? (
                                     <div className="text-center py-6 text-text-tertiary">
-                                        <p className="text-xs mb-2">No custom providers.</p>
-                                        <button className="text-[10px] text-accent-primary hover:underline">Manage in Settings</button>
+                                        <p className="text-xs mb-2">{t('modelSelector.noCustomProviders')}</p>
+                                        <button className="text-[10px] text-accent-primary hover:underline">{t('modelSelector.manageInSettings')}</button>
                                     </div>
                                 ) : (
                                     customProviders.map(provider => (
@@ -180,7 +182,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ currentModel, onSe
                                             key={provider.id}
                                             id={provider.id}
                                             name={provider.name}
-                                            desc="Custom cURL"
+                                            desc={t('modelSelector.customCurl')}
                                             icon={<Terminal size={14} />}
                                             selected={currentModel === provider.id}
                                             onSelect={() => handleSelect(provider.id)}
@@ -195,8 +197,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ currentModel, onSe
                             <div className="space-y-1">
                                 {ollamaModels.length === 0 ? (
                                     <div className="text-center py-6 text-text-tertiary">
-                                        <p className="text-xs">No Ollama models found.</p>
-                                        <p className="text-[10px] mt-1 opacity-70">Ensure Ollama is running.</p>
+                                        <p className="text-xs">{t('modelSelector.noOllamaModels')}</p>
+                                        <p className="text-[10px] mt-1 opacity-70">{t('modelSelector.ensureOllamaRunning')}</p>
                                     </div>
                                 ) : (
                                     ollamaModels.map(model => (
@@ -204,7 +206,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ currentModel, onSe
                                             key={model}
                                             id={`ollama-${model}`}
                                             name={model}
-                                            desc="Local"
+                                            desc={t('modelSelector.localLabel')}
                                             icon={<Server size={14} />}
                                             selected={currentModel === `ollama-${model}`}
                                             onSelect={() => handleSelect(`ollama-${model}`)}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useStreamBuffer } from '../hooks/useStreamBuffer';
 import { X, Copy, Check, Globe, ArrowUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -63,6 +64,7 @@ const UserMessage: React.FC<{ content: string }> = ({ content }) => (
 );
 
 const AssistantMessage: React.FC<{ content: string; isStreaming?: boolean }> = ({ content, isStreaming }) => {
+    const { t } = useTranslation();
     const [copied, setCopied] = useState(false);
 
     const handleCopy = async () => {
@@ -98,7 +100,7 @@ const AssistantMessage: React.FC<{ content: string; isStreaming?: boolean }> = (
                     className="flex items-center gap-2 mt-3 text-[13px] text-text-tertiary hover:text-text-secondary transition-colors"
                 >
                     {copied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-                    {copied ? 'Copied' : 'Copy message'}
+                    {copied ? t('globalChat.copied') : t('globalChat.copyMessage')}
                 </button>
             )}
         </motion.div>
@@ -116,6 +118,7 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
     onClose,
     initialQuery = ''
 }) => {
+    const { t } = useTranslation();
     const [messages, setMessages] = useState<Message[]>([]);
     const [chatState, setChatState] = useState<ChatState>('idle');
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -230,7 +233,7 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
             const errorCleanup = window.electronAPI?.onRAGStreamError((data: { error: string }) => {
                 console.error('[GlobalChat] RAG stream error:', data.error);
                 setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
-                setErrorMessage("Couldn't get a response. Please try again.");
+                setErrorMessage(t('globalChat.errors.noResponse'));
                 setChatState('error');
                 streamBuffer.reset();
                 tokenCleanup?.();
@@ -278,7 +281,7 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
                 const oldErrorCleanup = window.electronAPI?.onGeminiStreamError((error: string) => {
                     console.error('[GlobalChat] Gemini stream error:', error);
                     setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
-                    setErrorMessage("Couldn't get a response. Please check your settings.");
+                    setErrorMessage(t('globalChat.errors.checkSettings'));
                     setChatState('error');
                     streamBuffer.reset();
                     oldTokenCleanup?.();
@@ -293,10 +296,10 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
         } catch (error) {
             console.error('[GlobalChat] Error:', error);
             setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
-            setErrorMessage("Something went wrong. Please try again.");
+            setErrorMessage(t('globalChat.errors.generic'));
             setChatState('error');
         }
-    }, [chatState]);
+    }, [chatState, t]);
 
     return (
         <AnimatePresence
@@ -340,7 +343,7 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
                         <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle shrink-0">
                             <div className="flex items-center gap-2 text-text-tertiary">
                                 <img src={nativelyIcon} className="w-3.5 h-3.5 force-black-icon opacity-50" alt="logo" />
-                                <span className="text-[13px] font-medium">Search all meetings</span>
+                                <span className="text-[13px] font-medium">{t('globalChat.title')}</span>
                             </div>
                             <button
                                 onClick={onClose}
@@ -382,7 +385,7 @@ const GlobalChatOverlay: React.FC<GlobalChatOverlayProps> = ({
                                     value={query}
                                     onChange={(e) => setQuery(e.target.value)}
                                     onKeyDown={handleInputKeyDown}
-                                    placeholder="Ask me anything..."
+                                    placeholder={t('globalChat.askMeAnything')}
                                     className="w-full pl-5 pr-12 py-3 bg-bg-elevated shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-border-muted rounded-full text-sm text-text-primary placeholder-text-tertiary/70 focus:outline-none transition-all"
                                 />
                                 <button

@@ -387,5 +387,198 @@
         "activity": "Activity Monitor"
       }
     }
+  },
+  "app": {
+    "providerChanged": "Provider Changed",
+    "providerChangedMessage": "⚠ {{count}} meetings used your previous AI provider ({{oldProvider}}) and won't appear in search results under {{newProvider}}.",
+    "reindexAutomatically": "Re-index automatically",
+    "localAiMemoryReady": "Local AI memory ready",
+    "downloadingDefault": "Downloading..."
+  },
+  "cropper": {
+    "selectArea": "Select area",
+    "escToCancel": "to cancel"
+  },
+  "editable": {
+    "typeHerePlaceholder": "Type here..."
+  },
+  "errorBoundary": {
+    "crashedTitle": "{{context}} crashed",
+    "crashedDescription": "An unexpected error occurred. Your data is safe — click below to recover.",
+    "tryToRecover": "Try to recover",
+    "reloadUi": "Reload UI",
+    "defaultContext": "Application"
+  },
+  "featureSpotlight": {
+    "upcomingFeatures": "Upcoming features",
+    "tailoredAnswers": "Answers, tailored to you",
+    "tailoredBullet1": "Repo aware explanations",
+    "tailoredBullet2": "System design interview specialization",
+    "tailoredFooter": "Designed to work silently during live interviews.",
+    "supportDevelopment": "Support development",
+    "supportSubtitle": "Built openly and sustained by users",
+    "supportBullet1": "Development driven by real users",
+    "supportBullet2": "Faster iteration on features that matter",
+    "contributeToDevelopment": "Contribute to development",
+    "interested": "Interested",
+    "fundDevelopment": "Fund development",
+    "markInterest": "Mark interest"
+  },
+  "globalChat": {
+    "title": "Search all meetings",
+    "copyMessage": "Copy message",
+    "copied": "Copied",
+    "askMeAnything": "Ask me anything...",
+    "errors": {
+      "noResponse": "Couldn't get a response. Please try again.",
+      "checkSettings": "Couldn't get a response. Please check your settings.",
+      "generic": "Something went wrong. Please try again."
+    }
+  },
+  "modelSelectorWindow": {
+    "loadingModels": "Loading models...",
+    "noModelsLine1": "No models connected.",
+    "noModelsLine2": "Check Settings."
+  },
+  "startup": {
+    "appIconAlt": "App Icon"
+  },
+  "suggestion": {
+    "live": "Live",
+    "disconnected": "Disconnected",
+    "interviewer": "🎤 Interviewer",
+    "you": "👤 You",
+    "listening": "listening...",
+    "generating": "Generating suggestion...",
+    "suggestedResponse": "💡 Suggested Response",
+    "confidence": "{{percent}}% confidence",
+    "regardingPrefix": "Re:",
+    "instructions": "Say \"rephrase that\" or \"make it shorter\" for follow-ups"
+  },
+  "windowControls": {
+    "minimize": "Minimize",
+    "restore": "Restore",
+    "maximize": "Maximize"
+  },
+  "permissions": {
+    "headerLabel": "Natively · Permissions",
+    "dismiss": "Dismiss",
+    "beforeWeStart": "Before we start",
+    "descriptionMac": "Natively needs access to your screen and microphone to capture meetings and transcribe speech.",
+    "descriptionWin": "Click \"Allow\" if Windows asks for microphone or screen access when you start a meeting.",
+    "screenRecording": "Screen Recording",
+    "screenRecordingDescription": "Required to capture meeting content",
+    "microphone": "Microphone",
+    "microphoneDescription": "Required for speech transcription",
+    "openSettings": "Open Settings",
+    "requesting": "Requesting…",
+    "requestAccess": "Request Access",
+    "allSetContinue": "All set — continue",
+    "continue": "Continue",
+    "grantLaterHint": "You can grant permissions later in System Preferences.",
+    "statusSystemHandles": "System handles this",
+    "statusGranted": "Granted",
+    "statusDenied": "Denied — re-enable in Settings",
+    "statusNotGranted": "Not yet granted"
+  },
+  "queueCommands": {
+    "showHide": "Show/Hide",
+    "solve": "Solve",
+    "hint": "💡 Hint",
+    "hintTitle": "Get a hint on your partially written code (⌘6)",
+    "brainstorm": "🧠 Brainstorm",
+    "brainstormTitle": "Brainstorm 2-3 problem-solving approaches (⌘7)",
+    "stopRecording": "● Stop Recording",
+    "recordVoice": "🎤 Record Voice",
+    "chat": "💬 Chat",
+    "models": "⚙️ Models",
+    "signOut": "Sign Out",
+    "keyboardShortcuts": "Keyboard Shortcuts",
+    "toggleWindow": "Toggle Window",
+    "toggleWindowDesc": "Show or hide this window.",
+    "takeScreenshot": "Take Screenshot",
+    "takeScreenshotDesc": "Take a screenshot of the problem description. The tool will extract and analyze the problem. The 5 latest screenshots are saved.",
+    "solveProblem": "Solve Problem",
+    "solveProblemDesc": "Generate a solution based on the current problem.",
+    "audioResult": "Audio Result:",
+    "audioConnected": "🎤 Connected to native audio service",
+    "audioDisconnected": "⚠️ Disconnected from native audio service",
+    "listening": "🎤 Listening... speak into your microphone",
+    "notConnected": "⚠️ Native audio service not connected",
+    "suggestionErrorPrefix": "Error:"
+  },
+  "screenshotItem": {
+    "alt": "Screenshot",
+    "delete": "Delete screenshot"
+  },
+  "solutionCommands": {
+    "showHide": "Show/Hide",
+    "screenshotYourCode": "Screenshot your code",
+    "screenshot": "Screenshot",
+    "debug": "Debug",
+    "hint": "💡 Hint",
+    "hintTitle": "Screenshot your code first (⌘H), then press ⌘6 to get a hint",
+    "brainstorm": "🧠 Brainstorm",
+    "brainstormTitle": "Brainstorm 2-3 problem-solving approaches",
+    "startOver": "Start over",
+    "keyboardShortcuts": "Keyboard Shortcuts",
+    "toggleWindow": "Toggle Window",
+    "toggleWindowDesc": "Show or hide this window.",
+    "takeScreenshot": "Take Screenshot",
+    "takeScreenshotDesc": "Capture additional parts of the question or your solution for debugging help. Up to 5 extra screenshots are saved.",
+    "debugDesc": "Generate new solutions based on all previous and newly added screenshots.",
+    "startOverTitle": "Start Over",
+    "startOverDesc": "Start fresh with a new question.",
+    "signOut": "Sign Out"
+  },
+  "channelCard": {
+    "operational": "Operational",
+    "reconnecting": "Reconnecting...",
+    "errorStatus": "Error",
+    "via": "via {{label}}",
+    "details": "Details"
+  },
+  "connectCalendar": {
+    "calendarConnected": "Calendar Connected",
+    "connecting": "Connecting...",
+    "connectCalendar": "Connect calendar"
+  },
+  "keyRecorder": {
+    "pressKeys": "Press keys..."
+  },
+  "modelSelector": {
+    "cloud": "Cloud",
+    "custom": "Custom",
+    "local": "Local",
+    "noCloudProviders": "No cloud providers configured.",
+    "addApiKeys": "Add API keys in Settings.",
+    "noCustomProviders": "No custom providers.",
+    "manageInSettings": "Manage in Settings",
+    "noOllamaModels": "No Ollama models found.",
+    "ensureOllamaRunning": "Ensure Ollama is running.",
+    "customCurl": "Custom cURL",
+    "localLabel": "Local",
+    "preferredSuffix": "{{provider}} • Preferred"
+  },
+  "transcript": {
+    "listening": "Listening…",
+    "reconnecting": "Reconnecting",
+    "systemPrefix": "System:",
+    "micPrefix": "Mic:",
+    "collapseDetails": "Collapse error details",
+    "expandDetails": "Expand error details",
+    "audioDiagnostics": "Audio Diagnostics",
+    "issuesDetected": "Issues Detected",
+    "healthy": "Healthy",
+    "systemAudio": "System Audio",
+    "microphone": "Microphone",
+    "copyReport": "Copy Report",
+    "copied": "Copied",
+    "copyErrorDetails": "Copy STT error details"
+  },
+  "topPill": {
+    "logoAlt": "Natively",
+    "hide": "Hide",
+    "show": "Show"
   }
 }

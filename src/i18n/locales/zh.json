@@ -388,5 +388,198 @@
         "activity": "活动监视器"
       }
     }
+  },
+  "app": {
+    "providerChanged": "服务商已变更",
+    "providerChangedMessage": "⚠ 有 {{count}} 次会议使用了你之前的 AI 服务商({{oldProvider}}),在 {{newProvider}} 下的搜索结果中将不会出现。",
+    "reindexAutomatically": "自动重新索引",
+    "localAiMemoryReady": "本地 AI 记忆已就绪",
+    "downloadingDefault": "下载中..."
+  },
+  "cropper": {
+    "selectArea": "选择区域",
+    "escToCancel": "取消"
+  },
+  "editable": {
+    "typeHerePlaceholder": "在此输入..."
+  },
+  "errorBoundary": {
+    "crashedTitle": "{{context}} 崩溃了",
+    "crashedDescription": "发生了意外错误。你的数据是安全的 — 点击下方按钮即可恢复。",
+    "tryToRecover": "尝试恢复",
+    "reloadUi": "重新加载界面",
+    "defaultContext": "应用"
+  },
+  "featureSpotlight": {
+    "upcomingFeatures": "即将推出",
+    "tailoredAnswers": "为你量身定制的回答",
+    "tailoredBullet1": "理解代码仓库的解释",
+    "tailoredBullet2": "系统设计面试专项优化",
+    "tailoredFooter": "在实时面试中静默运行。",
+    "supportDevelopment": "支持开发",
+    "supportSubtitle": "开放打造,由用户共建",
+    "supportBullet1": "真实用户驱动开发",
+    "supportBullet2": "更快地迭代重要功能",
+    "contributeToDevelopment": "支持开发",
+    "interested": "已关注",
+    "fundDevelopment": "赞助开发",
+    "markInterest": "标记关注"
+  },
+  "globalChat": {
+    "title": "搜索所有会议",
+    "copyMessage": "复制消息",
+    "copied": "已复制",
+    "askMeAnything": "随便问我...",
+    "errors": {
+      "noResponse": "未能获取回复,请重试。",
+      "checkSettings": "未能获取回复,请检查设置。",
+      "generic": "出现了点问题,请重试。"
+    }
+  },
+  "modelSelectorWindow": {
+    "loadingModels": "加载模型中...",
+    "noModelsLine1": "未连接模型。",
+    "noModelsLine2": "请检查设置。"
+  },
+  "startup": {
+    "appIconAlt": "应用图标"
+  },
+  "suggestion": {
+    "live": "实时",
+    "disconnected": "已断开",
+    "interviewer": "🎤 面试官",
+    "you": "👤 你",
+    "listening": "聆听中...",
+    "generating": "正在生成建议...",
+    "suggestedResponse": "💡 建议回复",
+    "confidence": "{{percent}}% 置信度",
+    "regardingPrefix": "关于:",
+    "instructions": "说\"换种说法\"或\"再短一点\"以追问"
+  },
+  "windowControls": {
+    "minimize": "最小化",
+    "restore": "还原",
+    "maximize": "最大化"
+  },
+  "permissions": {
+    "headerLabel": "Natively · 权限",
+    "dismiss": "关闭",
+    "beforeWeStart": "在我们开始之前",
+    "descriptionMac": "Natively 需要屏幕和麦克风权限来捕获会议并转写语音。",
+    "descriptionWin": "当你开始会议时,如果 Windows 询问麦克风或屏幕访问权限,请点击\"允许\"。",
+    "screenRecording": "屏幕录制",
+    "screenRecordingDescription": "捕获会议内容所需",
+    "microphone": "麦克风",
+    "microphoneDescription": "语音转写所需",
+    "openSettings": "打开设置",
+    "requesting": "请求中…",
+    "requestAccess": "请求权限",
+    "allSetContinue": "已全部就绪 — 继续",
+    "continue": "继续",
+    "grantLaterHint": "你也可以稍后在系统偏好中授予权限。",
+    "statusSystemHandles": "由系统处理",
+    "statusGranted": "已授权",
+    "statusDenied": "已拒绝 — 请在系统设置中重新启用",
+    "statusNotGranted": "尚未授权"
+  },
+  "queueCommands": {
+    "showHide": "显示/隐藏",
+    "solve": "解答",
+    "hint": "💡 提示",
+    "hintTitle": "针对你的部分代码获取提示 (⌘6)",
+    "brainstorm": "🧠 头脑风暴",
+    "brainstormTitle": "构思 2-3 种解题思路 (⌘7)",
+    "stopRecording": "● 停止录制",
+    "recordVoice": "🎤 录制语音",
+    "chat": "💬 聊天",
+    "models": "⚙️ 模型",
+    "signOut": "退出登录",
+    "keyboardShortcuts": "键盘快捷键",
+    "toggleWindow": "切换窗口",
+    "toggleWindowDesc": "显示或隐藏此窗口。",
+    "takeScreenshot": "截图",
+    "takeScreenshotDesc": "截取问题描述。工具会提取并分析该问题。最近 5 张截图将被保存。",
+    "solveProblem": "解决问题",
+    "solveProblemDesc": "基于当前问题生成解决方案。",
+    "audioResult": "音频结果:",
+    "audioConnected": "🎤 已连接到本地音频服务",
+    "audioDisconnected": "⚠️ 已断开与本地音频服务的连接",
+    "listening": "🎤 聆听中... 请对着麦克风说话",
+    "notConnected": "⚠️ 未连接到本地音频服务",
+    "suggestionErrorPrefix": "错误:"
+  },
+  "screenshotItem": {
+    "alt": "截图",
+    "delete": "删除截图"
+  },
+  "solutionCommands": {
+    "showHide": "显示/隐藏",
+    "screenshotYourCode": "截图你的代码",
+    "screenshot": "截图",
+    "debug": "调试",
+    "hint": "💡 提示",
+    "hintTitle": "先截图你的代码 (⌘H),然后按 ⌘6 获取提示",
+    "brainstorm": "🧠 头脑风暴",
+    "brainstormTitle": "构思 2-3 种解题思路",
+    "startOver": "重新开始",
+    "keyboardShortcuts": "键盘快捷键",
+    "toggleWindow": "切换窗口",
+    "toggleWindowDesc": "显示或隐藏此窗口。",
+    "takeScreenshot": "截图",
+    "takeScreenshotDesc": "捕获问题或解决方案的更多部分以协助调试。最多可保存 5 张额外截图。",
+    "debugDesc": "基于全部既有及新增的截图生成新的解决方案。",
+    "startOverTitle": "重新开始",
+    "startOverDesc": "重新开始一个新问题。",
+    "signOut": "退出登录"
+  },
+  "channelCard": {
+    "operational": "运行正常",
+    "reconnecting": "重新连接中...",
+    "errorStatus": "出错",
+    "via": "通过 {{label}}",
+    "details": "详情"
+  },
+  "connectCalendar": {
+    "calendarConnected": "日历已连接",
+    "connecting": "连接中...",
+    "connectCalendar": "连接日历"
+  },
+  "keyRecorder": {
+    "pressKeys": "按下按键..."
+  },
+  "modelSelector": {
+    "cloud": "云端",
+    "custom": "自定义",
+    "local": "本地",
+    "noCloudProviders": "未配置云端服务商。",
+    "addApiKeys": "请在设置中添加 API Key。",
+    "noCustomProviders": "暂无自定义服务商。",
+    "manageInSettings": "在设置中管理",
+    "noOllamaModels": "未找到 Ollama 模型。",
+    "ensureOllamaRunning": "请确认 Ollama 正在运行。",
+    "customCurl": "自定义 cURL",
+    "localLabel": "本地",
+    "preferredSuffix": "{{provider}} • 首选"
+  },
+  "transcript": {
+    "listening": "聆听中…",
+    "reconnecting": "重新连接中",
+    "systemPrefix": "系统:",
+    "micPrefix": "麦克风:",
+    "collapseDetails": "收起错误详情",
+    "expandDetails": "展开错误详情",
+    "audioDiagnostics": "音频诊断",
+    "issuesDetected": "检测到问题",
+    "healthy": "正常",
+    "systemAudio": "系统音频",
+    "microphone": "麦克风",
+    "copyReport": "复制报告",
+    "copied": "已复制",
+    "copyErrorDetails": "复制 STT 错误详情"
+  },
+  "topPill": {
+    "logoAlt": "Natively",
+    "hide": "隐藏",
+    "show": "显示"
   }
 }

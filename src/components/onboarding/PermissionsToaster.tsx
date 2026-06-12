@@ -8,6 +8,7 @@
 // Windows: shows a simple instruction notice (OS handles permissions at first use).
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { X, Monitor, Mic, CheckCircle, AlertCircle, ExternalLink, ArrowRight } from 'lucide-react';
 
@@ -53,6 +54,7 @@ interface Props {
 }
 
 export const PermissionsToaster: React.FC<Props> = ({ isOpen, onDismiss }) => {
+  const { t } = useTranslation();
   const [visible,    setVisible]    = useState(false);
   const [platform,   setPlatform]   = useState<string>('darwin');
   const [micStatus,  setMicStatus]  = useState<PermStatus>('loading');
@@ -183,9 +185,9 @@ export const PermissionsToaster: React.FC<Props> = ({ isOpen, onDismiss }) => {
               {/* Header */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px', paddingBottom: '16px', borderBottom: `1px solid ${T.rule}` }}>
                 <span style={{ fontSize: '10.5px', fontWeight: 660, letterSpacing: '0.14em', textTransform: 'uppercase', color: T.t2 }}>
-                  Natively · Permissions
+                  {t('permissions.headerLabel')}
                 </span>
-                <button onClick={handleDismiss} aria-label="Dismiss"
+                <button onClick={handleDismiss} aria-label={t('permissions.dismiss')}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', opacity: 0.35, padding: 0, transition: 'opacity 150ms, background 150ms' }}
                   onMouseEnter={e => { e.currentTarget.style.opacity = '0.8'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
                   onMouseLeave={e => { e.currentTarget.style.opacity = '0.35'; e.currentTarget.style.background = 'transparent'; }}>
@@ -197,12 +199,12 @@ export const PermissionsToaster: React.FC<Props> = ({ isOpen, onDismiss }) => {
                 {/* Headline */}
                 <motion.div variants={ITEM}>
                   <h2 style={{ ...GT, fontSize: '22px', fontWeight: 720, letterSpacing: '-0.03em', lineHeight: 1.2, margin: '0 0 8px' }}>
-                    Before we start
+                    {t('permissions.beforeWeStart')}
                   </h2>
                   <p style={{ fontSize: '13px', lineHeight: 1.64, color: T.t3, margin: 0, maxWidth: '340px' }}>
                     {platform === 'darwin'
-                      ? 'Natively needs access to your screen and microphone to capture meetings and transcribe speech.'
-                      : 'Click "Allow" if Windows asks for microphone or screen access when you start a meeting.'}
+                      ? t('permissions.descriptionMac')
+                      : t('permissions.descriptionWin')}
                   </p>
                 </motion.div>
 
@@ -210,22 +212,22 @@ export const PermissionsToaster: React.FC<Props> = ({ isOpen, onDismiss }) => {
                 <motion.div variants={ITEM} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <PermRow
                     icon={Monitor}
-                    label="Screen Recording"
-                    description={platform === 'darwin' ? 'Required to capture meeting content' : 'Required to capture meeting content'}
+                    label={t('permissions.screenRecording')}
+                    description={t('permissions.screenRecordingDescription')}
                     status={scrStatus}
                     platform={platform}
-                    actionLabel="Open Settings"
+                    actionLabel={t('permissions.openSettings')}
                     actionIcon={ExternalLink}
                     onAction={platform === 'darwin' ? openScreenSettings : undefined}
                     reduced={reduced}
                   />
                   <PermRow
                     icon={Mic}
-                    label="Microphone"
-                    description="Required for speech transcription"
+                    label={t('permissions.microphone')}
+                    description={t('permissions.microphoneDescription')}
                     status={micStatus}
                     platform={platform}
-                    actionLabel={requesting ? 'Requesting…' : 'Request Access'}
+                    actionLabel={requesting ? t('permissions.requesting') : t('permissions.requestAccess')}
                     onAction={micStatus !== 'granted' && !requesting ? handleMicRequest : undefined}
                     reduced={reduced}
                   />
@@ -249,13 +251,13 @@ export const PermissionsToaster: React.FC<Props> = ({ isOpen, onDismiss }) => {
                     onMouseLeave={e => { if (!allGranted) e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
                   >
                     <span style={{ fontSize: '14px', fontWeight: 640, color: allGranted ? '#fff' : T.t2, letterSpacing: '-0.01em' }}>
-                      {allGranted ? 'All set — continue' : 'Continue'}
+                      {allGranted ? t('permissions.allSetContinue') : t('permissions.continue')}
                     </span>
                     <ArrowRight size={15} strokeWidth={2.2} color={allGranted ? '#fff' : T.t3} />
                   </button>
                   {!allGranted && (
                     <p style={{ fontSize: '11px', color: T.t4, textAlign: 'center', marginTop: '10px', fontFamily: T.font }}>
-                      You can grant permissions later in System Preferences.
+                      {t('permissions.grantLaterHint')}
                     </p>
                   )}
                 </motion.div>
@@ -283,13 +285,14 @@ function PermRow({
   onAction?:    () => void;
   reduced:      boolean;
 }) {
+  const { t } = useTranslation();
   const isGranted  = status === 'granted';
   const isDenied   = status === 'denied' || status === 'restricted';
   const isPending  = status === 'loading' || status === 'not-determined';
 
   const statusColor = isGranted ? T.green : isDenied ? T.red : T.amber;
-  const statusLabel = platform !== 'darwin' ? 'System handles this'
-    : isGranted ? 'Granted' : isDenied ? 'Denied — re-enable in Settings' : 'Not yet granted';
+  const statusLabel = platform !== 'darwin' ? t('permissions.statusSystemHandles')
+    : isGranted ? t('permissions.statusGranted') : isDenied ? t('permissions.statusDenied') : t('permissions.statusNotGranted');
 
   return (
     <div style={{

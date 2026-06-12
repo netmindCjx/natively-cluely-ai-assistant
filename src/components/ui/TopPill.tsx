@@ -1,4 +1,5 @@
 import { ChevronUp, ChevronDown } from "lucide-react";
+import { useTranslation } from 'react-i18next';
 import icon from "../icon.png";
 import type { OverlayAppearance } from "../../lib/overlayAppearance";
 
@@ -17,6 +18,7 @@ export default function TopPill({
     appearance,
     onLogoClick,
 }: TopPillProps) {
+    const { t } = useTranslation();
     return (
         <div className="flex justify-center mt-2 select-none z-50">
             <div
@@ -47,7 +49,7 @@ export default function TopPill({
                 >
                     <img
                         src={icon}
-                        alt="Natively"
+                        alt={t('topPill.logoAlt')}
                         className="w-[24px] h-[24px] object-contain opacity-95 scale-105 force-black-icon"
                         draggable="false"
                         onDragStart={(e) => e.preventDefault()}
@@ -79,7 +81,7 @@ export default function TopPill({
                             <ChevronDown className="w-3.5 h-3.5" />
                         )}
                     </span>
-                    <span className="tracking-wide opacity-80 group-hover:opacity-100">{expanded ? "Hide" : "Show"}</span>
+                    <span className="tracking-wide opacity-80 group-hover:opacity-100">{expanded ? t('topPill.hide') : t('topPill.show')}</span>
                 </button>
 
                 {/* STOP / QUIT BUTTON */}

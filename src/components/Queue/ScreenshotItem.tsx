@@ -1,5 +1,6 @@
 // src/components/ScreenshotItem.tsx
 import React from "react"
+import { useTranslation } from 'react-i18next';
 import { X } from "lucide-react"
 
 interface Screenshot {
@@ -20,6 +21,7 @@ const ScreenshotItem: React.FC<ScreenshotItemProps> = ({
   index,
   isLoading
 }) => {
+  const { t } = useTranslation();
   const handleDelete = async () => {
     await onDelete(index)
   }
@@ -37,7 +39,7 @@ const ScreenshotItem: React.FC<ScreenshotItemProps> = ({
           )}
           <img
             src={screenshot.preview}
-            alt="Screenshot"
+            alt={t('screenshotItem.alt')}
             className={`w-full h-full object-cover transition-transform duration-300 ${
               isLoading
                 ? "opacity-50"
@@ -52,7 +54,7 @@ const ScreenshotItem: React.FC<ScreenshotItemProps> = ({
               handleDelete()
             }}
             className="absolute top-2 left-2 p-1 rounded-full bg-black bg-opacity-50 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-            aria-label="Delete screenshot"
+            aria-label={t('screenshotItem.delete')}
           >
             <X size={16} />
           </button>

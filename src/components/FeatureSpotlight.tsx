@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, Bell, Rocket } from 'lucide-react';
 import mainui from "../UI_comp/mainui.png";
@@ -7,14 +8,14 @@ import mainui from "../UI_comp/mainui.png";
 
 interface FeatureSlide {
     id: string;
-    headline: string;
-    subtitle: string;
+    headlineKey: string;
+    subtitleKey: string;
     type?: 'feature' | 'support' | 'premium';
-    actionLabel?: string;
+    actionLabelKey?: string;
     url?: string;
     eyebrow?: string;
-    bullets?: string[];
-    footer?: string;
+    bulletKeys?: string[];
+    footerKey?: string;
 }
 
 // --- Data ---
@@ -22,24 +23,24 @@ interface FeatureSlide {
 const FEATURES: FeatureSlide[] = [
     {
         id: 'tailored_answers',
-        headline: 'Upcoming features',
-        subtitle: 'Answers, tailored to you',
-        bullets: ['Repo aware explanations', 'System design interview specialization'],
-        footer: 'Designed to work silently during live interviews.',
+        headlineKey: 'featureSpotlight.upcomingFeatures',
+        subtitleKey: 'featureSpotlight.tailoredAnswers',
+        bulletKeys: ['featureSpotlight.tailoredBullet1', 'featureSpotlight.tailoredBullet2'],
+        footerKey: 'featureSpotlight.tailoredFooter',
         type: 'premium',
     },
 
     {
         id: 'support_natively',
-        headline: 'Support development',
-        subtitle: 'Built openly and sustained by users',
-        bullets: [
-            'Development driven by real users',
-            'Faster iteration on features that matter',
+        headlineKey: 'featureSpotlight.supportDevelopment',
+        subtitleKey: 'featureSpotlight.supportSubtitle',
+        bulletKeys: [
+            'featureSpotlight.supportBullet1',
+            'featureSpotlight.supportBullet2',
 
         ],
         type: 'support',
-        actionLabel: 'Contribute to development',
+        actionLabelKey: 'featureSpotlight.contributeToDevelopment',
         url: 'https://buymeacoffee.com/evinjohnn'
     }
 ];
@@ -47,6 +48,7 @@ const FEATURES: FeatureSlide[] = [
 // --- Component ---
 
 export const FeatureSpotlight: React.FC = () => {
+    const { t } = useTranslation();
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
 
@@ -188,7 +190,7 @@ export const FeatureSpotlight: React.FC = () => {
                                         textShadow: (isPremium || isSupport) ? '0px 1px 1px rgba(0, 0, 0, 0.1)' : 'none',
                                     }}
                                 >
-                                    {currentFeature.headline}
+                                    {t(currentFeature.headlineKey)}
                                 </h2>
 
                                 {/* Subtitle */}
@@ -204,18 +206,18 @@ export const FeatureSpotlight: React.FC = () => {
                                         maxWidth: isSupport ? '380px' : '360px'
                                     }}
                                 >
-                                    {currentFeature.subtitle}
+                                    {t(currentFeature.subtitleKey)}
                                 </p>
 
-                                {currentFeature.bullets && (
+                                {currentFeature.bulletKeys && (
                                     <div className={`flex flex-col w-full max-w-[340px] gap-1 items-center translate-y-2.5`}>
-                                        {currentFeature.bullets.map((bullet, idx) => (
+                                        {currentFeature.bulletKeys.map((bulletKey, idx) => (
                                             <div key={idx} className={`flex items-center justify-center group/item transition-transform duration-200 px-2`}>
                                                 <span
                                                     className={`${isSupport ? 'text-[12px] leading-relaxed font-medium opacity-100' : 'text-[12.5px] leading-snug font-medium'}`}
                                                     style={{ letterSpacing: isSupport ? '0.01em' : '-0.01em', color: '#E6C46A' }}
                                                 >
-                                                    {bullet}
+                                                    {t(bulletKey)}
                                                 </span>
                                             </div>
                                         ))}
@@ -223,7 +225,7 @@ export const FeatureSpotlight: React.FC = () => {
                                 )}
 
                                 {/* Footer: In-flow for equal spacing */}
-                                {currentFeature.footer && (
+                                {currentFeature.footerKey && (
                                     <div className="w-full text-center pointer-events-none mt-2 translate-y-5">
                                         <p
                                             className="opacity-65 font-medium tracking-wide"
@@ -232,7 +234,7 @@ export const FeatureSpotlight: React.FC = () => {
                                                 color: '#F5F7FA'
                                             }}
                                         >
-                                            {currentFeature.footer}
+                                            {t(currentFeature.footerKey)}
                                         </p>
                                     </div>
                                 )}
@@ -304,13 +306,13 @@ export const FeatureSpotlight: React.FC = () => {
                                             >
                                                 <span>
                                                     {isInterested && !isSupport
-                                                        ? 'Interested'
+                                                        ? t('featureSpotlight.interested')
                                                         : (isSupport ? (
                                                             <span className="flex items-center gap-2">
                                                                 <Rocket size={14} className="text-[#1C1C1E]" strokeWidth={2.5} />
-                                                                Fund development
+                                                                {t('featureSpotlight.fundDevelopment')}
                                                             </span>
-                                                        ) : (currentFeature.actionLabel || 'Mark interest'))
+                                                        ) : (currentFeature.actionLabelKey ? t(currentFeature.actionLabelKey) : t('featureSpotlight.markInterest')))
                                                     }
                                                 </span>
 

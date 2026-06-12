@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react"
+import { useTranslation } from 'react-i18next';
 import { IoLogOutOutline } from "react-icons/io5"
 import { Dialog, DialogContent, DialogClose } from "../ui/dialog"
 
@@ -25,6 +26,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
   onCodeHint,
   onBrainstorm
 }) => {
+  const { t } = useTranslation();
   const [isTooltipVisible, setIsTooltipVisible] = useState(false)
   const tooltipRef = useRef<HTMLDivElement>(null)
   const [isRecording, setIsRecording] = useState(false)
@@ -47,7 +49,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
       console.log('[QueueCommands] Initial audio status:', status)
       setIsNativeAudioConnected(status.connected)
       if (status.connected) {
-        setAudioResult('🎤 Connected to native audio service')
+        setAudioResult(t('queueCommands.audioConnected'))
       }
     }).catch(err => console.error('Failed to get audio status:', err))
 
@@ -55,13 +57,13 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
     cleanupFns.push(window.electronAPI.onNativeAudioConnected(() => {
       console.log('[QueueCommands] Native audio connected')
       setIsNativeAudioConnected(true)
-      setAudioResult('🎤 Connected to native audio service')
+      setAudioResult(t('queueCommands.audioConnected'))
     }))
 
     cleanupFns.push(window.electronAPI.onNativeAudioDisconnected(() => {
       console.log('[QueueCommands] Native audio disconnected')
       setIsNativeAudioConnected(false)
-      setAudioResult('⚠️ Disconnected from native audio service')
+      setAudioResult(t('queueCommands.audioDisconnected'))
     }))
 
     // Transcript updates
@@ -86,7 +88,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
     cleanupFns.push(window.electronAPI.onSuggestionError((error) => {
       console.error('[QueueCommands] Suggestion error:', error)
       setIsSuggestionLoading(false)
-      setLatestSuggestion(`Error: ${error.error}`)
+      setLatestSuggestion(`${t('queueCommands.suggestionErrorPrefix')} ${error.error}`)
     }))
 
     return () => cleanupFns.forEach(fn => fn())
@@ -116,8 +118,8 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
       setLatestSuggestion(null)
     } else {
       setAudioResult(isNativeAudioConnected
-        ? '🎤 Listening... speak into your microphone'
-        : '⚠️ Native audio service not connected')
+        ? t('queueCommands.listening')
+        : t('queueCommands.notConnected'))
     }
   }
 
@@ -128,7 +130,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
       <div className="text-xs text-white/90 liquid-glass-bar py-1 px-4 flex items-center justify-center gap-4 header-draggable-area">
         {/* Show/Hide */}
         <div className="flex items-center gap-2">
-          <span className="text-[11px] leading-none">Show/Hide</span>
+          <span className="text-[11px] leading-none">{t('queueCommands.showHide')}</span>
           <div className="flex gap-1">
             <button className="bg-white/10 hover:bg-white/20 transition-colors rounded-md px-1.5 py-1 text-[11px] leading-none text-white/70">
               ⌘
@@ -145,7 +147,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
         {/* Solve Command */}
         {screenshots.length > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-[11px] leading-none">Solve</span>
+            <span className="text-[11px] leading-none">{t('queueCommands.solve')}</span>
             <div className="flex gap-1">
               <button className="bg-white/10 hover:bg-white/20 transition-colors rounded-md px-1.5 py-1 text-[11px] leading-none text-white/70">
                 ⌘
@@ -164,9 +166,9 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
               className="bg-white/10 hover:bg-white/20 transition-colors rounded-md px-2 py-1 text-[11px] leading-none text-white/70 flex items-center gap-1"
               onClick={onCodeHint}
               type="button"
-              title="Get a hint on your partially written code (⌘6)"
+              title={t('queueCommands.hintTitle')}
             >
-              💡 Hint
+              {t('queueCommands.hint')}
             </button>
             <div className="flex gap-1">
               <button className="bg-white/10 hover:bg-white/20 transition-colors rounded-md px-1.5 py-1 text-[11px] leading-none text-white/70">
@@ -185,9 +187,9 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
             className="bg-white/10 hover:bg-white/20 transition-colors rounded-md px-2 py-1 text-[11px] leading-none text-white/70 flex items-center gap-1"
             onClick={onBrainstorm}
             type="button"
-            title="Brainstorm 2-3 problem-solving approaches (⌘7)"
+            title={t('queueCommands.brainstormTitle')}
           >
-            🧠 Brainstorm
+            {t('queueCommands.brainstorm')}
           </button>
           <div className="flex gap-1">
             <button className="bg-white/10 hover:bg-white/20 transition-colors rounded-md px-1.5 py-1 text-[11px] leading-none text-white/70">
@@ -207,9 +209,9 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
             type="button"
           >
             {isRecording ? (
-              <span className="animate-pulse">● Stop Recording</span>
+              <span className="animate-pulse">{t('queueCommands.stopRecording')}</span>
             ) : (
-              <span>🎤 Record Voice</span>
+              <span>{t('queueCommands.recordVoice')}</span>
             )}
           </button>
         </div>
@@ -221,7 +223,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
             onClick={onChatToggle}
             type="button"
           >
-            💬 Chat
+            {t('queueCommands.chat')}
           </button>
         </div>
 
@@ -232,7 +234,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
             onClick={onSettingsToggle}
             type="button"
           >
-            ⚙️ Models
+            {t('queueCommands.models')}
           </button>
         </div>
 
@@ -257,12 +259,12 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
             >
               <div className="p-3 text-xs bg-black/80 backdrop-blur-md rounded-lg border border-white/10 text-white/90 shadow-lg">
                 <div className="space-y-4">
-                  <h3 className="font-medium truncate">Keyboard Shortcuts</h3>
+                  <h3 className="font-medium truncate">{t('queueCommands.keyboardShortcuts')}</h3>
                   <div className="space-y-3">
                     {/* Toggle Command */}
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="truncate">Toggle Window</span>
+                        <span className="truncate">{t('queueCommands.toggleWindow')}</span>
                         <div className="flex gap-1 flex-shrink-0">
                           <span className="bg-white/10 px-1.5 py-0.5 rounded text-[10px] leading-none">
                             ⌘
@@ -273,13 +275,13 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                         </div>
                       </div>
                       <p className="text-[10px] leading-relaxed text-white/70 truncate">
-                        Show or hide this window.
+                        {t('queueCommands.toggleWindowDesc')}
                       </p>
                     </div>
                     {/* Screenshot Command */}
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="truncate">Take Screenshot</span>
+                        <span className="truncate">{t('queueCommands.takeScreenshot')}</span>
                         <div className="flex gap-1 flex-shrink-0">
                           <span className="bg-white/10 px-1.5 py-0.5 rounded text-[10px] leading-none">
                             ⌘
@@ -290,16 +292,14 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                         </div>
                       </div>
                       <p className="text-[10px] leading-relaxed text-white/70 truncate">
-                        Take a screenshot of the problem description. The tool
-                        will extract and analyze the problem. The 5 latest
-                        screenshots are saved.
+                        {t('queueCommands.takeScreenshotDesc')}
                       </p>
                     </div>
 
                     {/* Solve Command */}
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <span className="truncate">Solve Problem</span>
+                        <span className="truncate">{t('queueCommands.solveProblem')}</span>
                         <div className="flex gap-1 flex-shrink-0">
                           <span className="bg-white/10 px-1.5 py-0.5 rounded text-[10px] leading-none">
                             ⌘
@@ -310,7 +310,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
                         </div>
                       </div>
                       <p className="text-[10px] leading-relaxed text-white/70 truncate">
-                        Generate a solution based on the current problem.
+                        {t('queueCommands.solveProblemDesc')}
                       </p>
                     </div>
                   </div>
@@ -326,7 +326,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
         {/* Sign Out Button - Moved to end */}
         <button
           className="text-red-500/70 hover:text-red-500/90 transition-colors"
-          title="Sign Out"
+          title={t('queueCommands.signOut')}
           onClick={() => window.electronAPI.quitApp()}
         >
           <IoLogOutOutline className="w-4 h-4" />
@@ -335,7 +335,7 @@ const QueueCommands: React.FC<QueueCommandsProps> = ({
       {/* Audio Result Display */}
       {audioResult && (
         <div className="mt-2 p-2 bg-white/10 rounded text-white text-xs max-w-md">
-          <span className="font-semibold">Audio Result:</span> {audioResult}
+          <span className="font-semibold">{t('queueCommands.audioResult')}</span> {audioResult}
         </div>
       )}
       {/* Chat Dialog Overlay */}

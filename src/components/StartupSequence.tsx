@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { motion } from 'framer-motion';
 import appIcon from './icon.png';
 
@@ -7,6 +8,7 @@ interface StartupSequenceProps {
 }
 
 const StartupSequence: React.FC<StartupSequenceProps> = ({ onComplete }) => {
+    const { t } = useTranslation();
     useEffect(() => {
         const timer = setTimeout(() => {
             onComplete();
@@ -26,7 +28,7 @@ const StartupSequence: React.FC<StartupSequenceProps> = ({ onComplete }) => {
 
             <motion.img
                 src={appIcon}
-                alt="App Icon"
+                alt={t('startup.appIconAlt')}
                 className="w-24 h-24 object-contain relative z-10"
                 initial={{
                     opacity: 0,

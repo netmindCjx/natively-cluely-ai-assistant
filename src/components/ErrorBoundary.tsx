@@ -5,6 +5,7 @@
 // Usage: Wrap the root component tree in <ErrorBoundary> in App.tsx.
 
 import React, { Component, ReactNode } from 'react';
+import i18n from '../i18n';
 import { RefreshCw, AlertTriangle } from 'lucide-react';
 
 interface Props {
@@ -65,7 +66,7 @@ export class ErrorBoundary extends Component<Props, State> {
             return this.props.children;
         }
 
-        const context = this.props.context ?? 'Application';
+        const context = this.props.context ?? i18n.t('errorBoundary.defaultContext');
 
         return (
             <div
@@ -86,10 +87,10 @@ export class ErrorBoundary extends Component<Props, State> {
             >
                 <AlertTriangle size={36} color="#ff4444" style={{ marginBottom: '4px' }} />
                 <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#fff' }}>
-                    {context} crashed
+                    {i18n.t('errorBoundary.crashedTitle', { context })}
                 </h2>
                 <p style={{ margin: 0, fontSize: '12px', color: '#888', maxWidth: '320px', lineHeight: 1.5 }}>
-                    An unexpected error occurred. Your data is safe — click below to recover.
+                    {i18n.t('errorBoundary.crashedDescription')}
                 </p>
                 {this.state.errorMessage && (
                     <code style={{
@@ -118,7 +119,7 @@ export class ErrorBoundary extends Component<Props, State> {
                         }}
                     >
                         <RefreshCw size={13} />
-                        Try to recover
+                        {i18n.t('errorBoundary.tryToRecover')}
                     </button>
                     <button
                         onClick={this.handleHardReload}
@@ -130,7 +131,7 @@ export class ErrorBoundary extends Component<Props, State> {
                         }}
                     >
                         <RefreshCw size={13} />
-                        Reload UI
+                        {i18n.t('errorBoundary.reloadUi')}
                     </button>
                 </div>
             </div>

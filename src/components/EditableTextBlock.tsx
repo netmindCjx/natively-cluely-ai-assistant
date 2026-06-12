@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface EditableTextBlockProps {
     initialValue: string;
@@ -16,11 +17,13 @@ const EditableTextBlock: React.FC<EditableTextBlockProps> = ({
     onSave,
     tagName = 'div',
     className = '',
-    placeholder = 'Type here...',
+    placeholder,
     multiline = true,
     onEnter,
     autoFocus = false
 }) => {
+    const { t } = useTranslation();
+    const effectivePlaceholder = placeholder ?? t('editable.typeHerePlaceholder');
     const [isEditing, setIsEditing] = useState(autoFocus); // Start editing if autoFocus is true
     const [localValue, setLocalValue] = useState(initialValue);
     const contentRef = useRef<HTMLElement>(null);
@@ -136,10 +139,10 @@ const EditableTextBlock: React.FC<EditableTextBlockProps> = ({
             className={`
                 outline-none min-w-[10px] cursor-text transition-colors duration-200
                 bg-transparent
-                ${!localValue && placeholder ? 'empty:before:content-[attr(data-placeholder)] empty:before:text-white/20' : ''}
+                ${!localValue && effectivePlaceholder ? 'empty:before:content-[attr(data-placeholder)] empty:before:text-white/20' : ''}
                 ${className}
             `}
-            data-placeholder={placeholder}
+            data-placeholder={effectivePlaceholder}
             spellCheck={false} // Clean look
         >
             {initialValue}
