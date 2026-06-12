@@ -73,6 +73,10 @@ web_modules/
 # TypeScript cache
 *.tsbuildinfo
 
+# Accidental tsc output of vite.config.mts
+vite.config.mjs
+vite.config.d.mts
+
 # Optional npm cache directory
 .npm
 
