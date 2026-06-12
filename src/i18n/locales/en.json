@@ -1,0 +1,95 @@
+{
+  "common": {
+    "close": "Close",
+    "auto": "Auto",
+    "open": "Open"
+  },
+  "settings": {
+    "sidebar": {
+      "title": "Settings",
+      "general": "General",
+      "profile": "Profile Intelligence",
+      "aiProviders": "AI Providers",
+      "calendar": "Calendar",
+      "audio": "Audio",
+      "keybinds": "Keybinds",
+      "help": "Setup & Help",
+      "about": "About",
+      "quit": "Quit Natively"
+    },
+    "general": {
+      "undetectable": {
+        "titleOn": "Undetectable",
+        "titleOff": "Detectable",
+        "descriptionOn": "Natively is currently undetectable by screen-sharing.",
+        "descriptionOff": "Natively is currently detectable by screen-sharing.",
+        "supportedApps": "Supported apps here"
+      },
+      "mousePassthrough": {
+        "title": "Mouse Passthrough",
+        "description": "Overlay stays visible but lets all mouse clicks pass through to the app beneath."
+      },
+      "header": {
+        "title": "General settings",
+        "subtitle": "Customize how Natively works for you"
+      },
+      "openAtLogin": {
+        "title": "Open Natively when you log in",
+        "description": "Natively will open automatically when you log in to your computer"
+      },
+      "verboseLogging": {
+        "title": "Verbose debug logging",
+        "description": "Print detailed audio, STT, and pipeline diagnostics",
+        "toastLabel": "Logs"
+      },
+      "transcript": {
+        "title": "Interviewer Transcript",
+        "description": "Show real-time transcription of the interviewer"
+      },
+      "theme": {
+        "title": "Theme",
+        "description": "Customize how Natively looks on your device",
+        "system": "System",
+        "light": "Light",
+        "dark": "Dark"
+      },
+      "language": {
+        "title": "Language",
+        "description": "Choose the interface language",
+        "en": "English",
+        "zh": "中文"
+      },
+      "aiLanguage": {
+        "title": "AI Response Language",
+        "descriptionAuto": "Mirrors user's language automatically",
+        "description": "Language for AI suggestions and notes"
+      },
+      "version": {
+        "title": "Version",
+        "description": "You are currently using Natively version {{version}}",
+        "checking": "Checking...",
+        "available": "Update Available",
+        "upToDate": "Up to date",
+        "error": "Error",
+        "checkForUpdates": "Check for updates"
+      },
+      "opacity": {
+        "title": "Interface Opacity",
+        "moreStealth": "More Stealth",
+        "fullyVisible": "Fully Visible",
+        "description": "Controls the visibility of the in-meeting overlay.",
+        "holdToPreview": "Hold the slider to preview."
+      },
+      "disguise": {
+        "title": "Process Disguise",
+        "description": "Disguise Natively as another application to prevent detection during screen sharing.",
+        "hint": "Select a disguise to be automatically applied when Undetectable mode is on.",
+        "warning": "⚠️ Disable Undetectable mode first to change disguise.",
+        "none": "None (Default)",
+        "terminal": "Terminal",
+        "settings": "System Settings",
+        "activity": "Activity Monitor"
+      }
+    }
+  }
+}

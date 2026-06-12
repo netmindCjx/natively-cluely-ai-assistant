@@ -1,0 +1,95 @@
+{
+  "common": {
+    "close": "关闭",
+    "auto": "自动",
+    "open": "打开"
+  },
+  "settings": {
+    "sidebar": {
+      "title": "设置",
+      "general": "通用",
+      "profile": "个人档案",
+      "aiProviders": "AI 服务商",
+      "calendar": "日历",
+      "audio": "音频",
+      "keybinds": "快捷键",
+      "help": "设置与帮助",
+      "about": "关于",
+      "quit": "退出 Natively"
+    },
+    "general": {
+      "undetectable": {
+        "titleOn": "不可被检测",
+        "titleOff": "可被检测",
+        "descriptionOn": "Natively 当前在屏幕共享中不可被检测。",
+        "descriptionOff": "Natively 当前在屏幕共享中可被检测。",
+        "supportedApps": "查看支持的应用"
+      },
+      "mousePassthrough": {
+        "title": "鼠标穿透",
+        "description": "窗口保持可见,但所有鼠标点击会穿透到下方应用。"
+      },
+      "header": {
+        "title": "通用设置",
+        "subtitle": "自定义 Natively 的工作方式"
+      },
+      "openAtLogin": {
+        "title": "登录时启动 Natively",
+        "description": "登录电脑时自动打开 Natively"
+      },
+      "verboseLogging": {
+        "title": "详细调试日志",
+        "description": "打印音频、语音识别和处理流程的详细诊断信息",
+        "toastLabel": "日志"
+      },
+      "transcript": {
+        "title": "面试官语音转写",
+        "description": "实时显示面试官的语音转写文本"
+      },
+      "theme": {
+        "title": "主题",
+        "description": "自定义 Natively 在你设备上的外观",
+        "system": "跟随系统",
+        "light": "浅色",
+        "dark": "深色"
+      },
+      "language": {
+        "title": "界面语言",
+        "description": "选择应用界面的显示语言",
+        "en": "English",
+        "zh": "中文"
+      },
+      "aiLanguage": {
+        "title": "AI 回复语言",
+        "descriptionAuto": "自动匹配用户语言",
+        "description": "AI 建议和笔记所使用的语言"
+      },
+      "version": {
+        "title": "版本",
+        "description": "当前使用的 Natively 版本为 {{version}}",
+        "checking": "检查中...",
+        "available": "有可用更新",
+        "upToDate": "已是最新",
+        "error": "出错",
+        "checkForUpdates": "检查更新"
+      },
+      "opacity": {
+        "title": "界面不透明度",
+        "moreStealth": "更隐蔽",
+        "fullyVisible": "完全可见",
+        "description": "控制会议中浮层的可见程度。",
+        "holdToPreview": "按住滑块可预览效果。"
+      },
+      "disguise": {
+        "title": "进程伪装",
+        "description": "将 Natively 伪装成其他应用,避免在屏幕共享时被检测。",
+        "hint": "选择一个伪装,启用不可检测模式时会自动应用。",
+        "warning": "⚠️ 请先关闭不可检测模式再更改伪装。",
+        "none": "无 (默认)",
+        "terminal": "终端",
+        "settings": "系统设置",
+        "activity": "活动监视器"
+      }
+    }
+  }
+}
