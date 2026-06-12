@@ -2,7 +2,170 @@
   "common": {
     "close": "关闭",
     "auto": "自动",
-    "open": "打开"
+    "open": "打开",
+    "openSettings": "打开设置",
+    "dismiss": "关闭",
+    "remove": "移除",
+    "removeAll": "全部移除",
+    "copyToClipboard": "复制到剪贴板",
+    "interviewer": "面试官",
+    "cancel": "取消",
+    "confirm": "确认",
+    "retry": "重试",
+    "delete": "删除",
+    "save": "保存",
+    "loading": "加载中...",
+    "error": "出错"
+  },
+  "debug": {
+    "complexity": "复杂度",
+    "calculating": "正在计算复杂度...",
+    "time": "时间:",
+    "space": "空间:",
+    "whatChanged": "我做了什么改动",
+    "errors": {
+      "processingFailed": "处理失败",
+      "processingFailedDesc": "调试代码时出错。"
+    }
+  },
+  "solutions": {
+    "errors": {
+      "generationFailed": "生成失败",
+      "generationFailedDesc": "无法生成面试脚本,请重试。",
+      "debugFailed": "调试失败",
+      "debugFailedDesc": "调试代码时出错。",
+      "noScreenshots": "没有截图",
+      "noScreenshotsDesc": "没有可处理的截图。"
+    },
+    "phases": {
+      "understand": "理解问题",
+      "brainstorm": "构思方案",
+      "writeCode": "编写代码",
+      "verify": "验证与讨论",
+      "dryRun": "演练与复杂度",
+      "label": "阶段 {{phase}}",
+      "time": "时间:",
+      "space": "空间:"
+    },
+    "sayOutLoud": "大声说出这段",
+    "draftingScript": "正在草拟面试脚本…"
+  },
+  "queue": {
+    "errors": {
+      "loadScreenshots": "加载已有截图失败",
+      "deleteScreenshot": "删除截图文件失败",
+      "processingFailed": "处理失败",
+      "processingFailedDesc": "处理截图时出错。",
+      "noScreenshots": "没有截图",
+      "noScreenshotsDesc": "没有可处理的截图。"
+    },
+    "chat": {
+      "intro": "与 {{model}} 对话",
+      "hint1": "按 Cmd+H 截图自动分析",
+      "hint2": "点击 ⚙️ 模型切换 AI 服务商",
+      "replying": "{{model}} 正在回复...",
+      "inputPlaceholder": "输入消息...",
+      "send": "发送",
+      "modelSwitched": "🔄 已切换到 {{model}},可以提问了!",
+      "analyzing_one": "📷 正在分析 {{count}} 张截图...",
+      "analyzing_other": "📷 正在分析 {{count}} 张截图..."
+    }
+  },
+  "meetingChat": {
+    "title": "搜索本次会议",
+    "copyMessage": "复制消息",
+    "copied": "已复制",
+    "errors": {
+      "noResponse": "未能获取回复,请重试。",
+      "checkSettings": "未能获取回复,请检查设置。",
+      "generic": "出现了点问题,请重试。"
+    }
+  },
+  "meetingDetails": {
+    "tabs": {
+      "summary": "摘要",
+      "transcript": "转写",
+      "usage": "用量",
+      "analysis": "分析"
+    },
+    "copy": {
+      "summary": "复制完整摘要",
+      "transcript": "复制完整转写",
+      "usage": "复制用量",
+      "analysis": "复制分析",
+      "copied": "已复制"
+    },
+    "speaker": {
+      "me": "我",
+      "them": "对方"
+    },
+    "actionItems": "待办事项",
+    "keyPoints": "重点",
+    "actionItemPlaceholder": "输入一个待办...",
+    "keyPointPlaceholder": "输入一个重点...",
+    "noUsage": "本次会议没有 Token 用量记录。",
+    "askPlaceholder": "提问关于这次会议...",
+    "loading": "加载会议中...",
+    "notFound": "未找到会议",
+    "transcript": "转写",
+    "summary": "摘要",
+    "actionItems": "待办事项",
+    "questions": "问题",
+    "decisions": "决策",
+    "share": "分享",
+    "delete": "删除",
+    "edit": "编辑",
+    "save": "保存",
+    "cancel": "取消",
+    "confirmDelete": "确认删除这次会议?",
+    "deleteWarning": "此操作无法撤销。",
+    "noTranscript": "暂无转写",
+    "noSummary": "暂无摘要",
+    "back": "返回",
+    "untitled": "未命名会议"
+  },
+  "interface": {
+    "answerLabels": {
+      "codeSolution": "代码方案",
+      "shortened": "简短回答",
+      "recap": "回顾",
+      "followUp": "追问问题",
+      "sayThis": "可以这样说"
+    },
+    "warnings": {
+      "screenRecordingDenied": "屏幕录制权限被拒绝",
+      "transcriptionNotConfigured": "未配置语音转写",
+      "sttNotConfiguredDescription": "尚未选择 STT 服务,请在设置 → 音频 中选择。"
+    },
+    "messages": {
+      "screenshotAttached": "已附加截图",
+      "screenshotAttachedCount_one": "已附加 {{count}} 张截图",
+      "screenshotAttachedCount_other": "已附加 {{count}} 张截图",
+      "listening": "聆听中..."
+      ,
+      "askOrClickAnswer": "提问或点击「回答」"
+    },
+    "quickActions": {
+      "whatToAnswer": "怎么回答?",
+      "clarify": "澄清",
+      "systemDesign": "系统设计",
+      "brainstorm": "头脑风暴",
+      "recap": "回顾",
+      "followup": "追问",
+      "stop": "停止",
+      "answer": "回答"
+    },
+    "input": {
+      "promptPrefix": "可询问屏幕或会话内容,或按",
+      "promptSuffix": "选区截图"
+    },
+    "presetMessages": {
+      "whatToSay": "针对这个我该怎么说?",
+      "codeHint": "请给我一个代码提示",
+      "brainstorm": "结合上下文进行头脑风暴",
+      "systemDesign": "画出系统设计",
+      "analyzeScreenshot": "分析这张截图"
+    }
   },
   "settings": {
     "sidebar": {

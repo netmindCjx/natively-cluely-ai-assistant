@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { ArrowLeft, Search, Mail, Link, ChevronDown, Play, ArrowUp, Copy, Check, MoreHorizontal, Settings, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -92,6 +93,7 @@ interface MeetingDetailsProps {
 }
 
 const MeetingDetails: React.FC<MeetingDetailsProps> = ({ meeting: initialMeeting }) => {
+    const { t } = useTranslation();
     const isLight = useResolvedTheme() === 'light';
     // We need local state for the meeting object to reflect optimistic updates
     const [meeting, setMeeting] = useState<Meeting>(initialMeeting);
@@ -264,7 +266,7 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                                             transition={{ type: "spring", stiffness: 400, damping: 30 }}
                                         />
                                     )}
-                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                    {t(`meetingDetails.tabs.${tab}`)}
                                 </button>
                             ))}
                         </div>
@@ -275,7 +277,7 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                             className="flex items-center gap-2 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors"
                         >
                             {isCopied ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
-                            {isCopied ? 'Copied' : activeTab === 'summary' ? 'Copy full summary' : activeTab === 'transcript' ? 'Copy full transcript' : activeTab === 'usage' ? 'Copy usage' : 'Copy analysis'}
+                            {isCopied ? t('meetingDetails.copy.copied') : t(`meetingDetails.copy.${activeTab}`)}
                         </button>
                     </div>
 
@@ -311,7 +313,7 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                                     <section className="mb-8">
                                         <div className="flex items-center justify-between mb-4">
                                             <EditableTextBlock
-                                                initialValue={meeting.detailedSummary?.actionItemsTitle || 'Action Items'}
+                                                initialValue={meeting.detailedSummary?.actionItemsTitle || t('meetingDetails.actionItems')}
                                                 onSave={(val) => {
                                                     setMeeting(prev => ({
                                                         ...prev,
@@ -334,7 +336,7 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                                                             onSave={(val) => handleActionItemSave(i, val)}
                                                             tagName="p"
                                                             className="text-sm text-text-secondary leading-relaxed -ml-2 px-2 rounded-sm transition-colors"
-                                                            placeholder="Type an action item..."
+                                                            placeholder={t('meetingDetails.actionItemPlaceholder')}
                                                             onEnter={() => {
                                                                 const newItems = [...(meeting.detailedSummary?.actionItems || [])];
                                                                 newItems.splice(i + 1, 0, "");
@@ -356,7 +358,7 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                                     <section>
                                         <div className="flex items-center justify-between mb-4">
                                             <EditableTextBlock
-                                                initialValue={meeting.detailedSummary?.keyPointsTitle || 'Key Points'}
+                                                initialValue={meeting.detailedSummary?.keyPointsTitle || t('meetingDetails.keyPoints')}
                                                 onSave={(val) => {
                                                     setMeeting(prev => ({
                                                         ...prev,
@@ -379,7 +381,7 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                                                             onSave={(val) => handleKeyPointSave(i, val)}
                                                             tagName="p"
                                                             className="text-sm text-text-secondary leading-relaxed -ml-2 px-2 rounded-sm transition-colors"
-                                                            placeholder="Type a key point..."
+                                                            placeholder={t('meetingDetails.keyPointPlaceholder')}
                                                             onEnter={() => {
                                                                 const newItems = [...(meeting.detailedSummary?.keyPoints || [])];
                                                                 newItems.splice(i + 1, 0, "");
@@ -441,7 +443,7 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                                             <div key={i} className="group">
                                                 <div className="flex items-center gap-2 mb-1">
                                                     <span className="text-xs font-semibold text-text-secondary">
-                                                        {entry.speaker === 'user' ? 'Me' : 'Them'}
+                                                        {entry.speaker === 'user' ? t('meetingDetails.speaker.me') : t('meetingDetails.speaker.them')}
                                                     </span>
                                                     <span className="text-xs text-text-tertiary font-mono">{entry.timestamp ? formatTime(entry.timestamp) : '0:00'}</span>
                                                 </div>
@@ -549,7 +551,7 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                                     if (!tu || (!tu.totals.llmCallCount && !tu.totals.sttSeconds)) {
                                         return (
                                             <div className="text-text-tertiary text-sm">
-                                                <p>No token usage data recorded for this meeting.</p>
+                                                <p>{t('meetingDetails.noUsage')}</p>
                                                 <p className="mt-2 text-xs">Token tracking was added recently — meetings created before the update will not have analysis data.</p>
                                             </div>
                                         );
@@ -653,7 +655,7 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         onKeyDown={handleInputKeyDown}
-                        placeholder="Ask about this meeting..."
+                        placeholder={t('meetingDetails.askPlaceholder')}
                         className="w-full pl-5 pr-12 py-3 bg-transparent backdrop-blur-[24px] backdrop-saturate-[140%] shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 rounded-full text-sm text-text-primary placeholder-text-tertiary/70 focus:outline-none transition-shadow duration-200"
                     />
                     <button

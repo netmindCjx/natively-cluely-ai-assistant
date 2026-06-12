@@ -2,7 +2,169 @@
   "common": {
     "close": "Close",
     "auto": "Auto",
-    "open": "Open"
+    "open": "Open",
+    "openSettings": "Open Settings",
+    "dismiss": "Dismiss",
+    "remove": "Remove",
+    "removeAll": "Remove all",
+    "copyToClipboard": "Copy to clipboard",
+    "interviewer": "Interviewer",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "retry": "Retry",
+    "delete": "Delete",
+    "save": "Save",
+    "loading": "Loading...",
+    "error": "Error"
+  },
+  "debug": {
+    "complexity": "Complexity",
+    "calculating": "Calculating complexity...",
+    "time": "Time:",
+    "space": "Space:",
+    "whatChanged": "What I Changed",
+    "errors": {
+      "processingFailed": "Processing Failed",
+      "processingFailedDesc": "There was an error debugging your code."
+    }
+  },
+  "solutions": {
+    "errors": {
+      "generationFailed": "Generation Failed",
+      "generationFailedDesc": "Couldn't generate the interview script. Try again.",
+      "debugFailed": "Debug Failed",
+      "debugFailedDesc": "There was an error debugging your code.",
+      "noScreenshots": "No Screenshots",
+      "noScreenshotsDesc": "There are no screenshots to process."
+    },
+    "phases": {
+      "understand": "Understand the Problem",
+      "brainstorm": "Brainstorm Approaches",
+      "writeCode": "Write the Code",
+      "verify": "Verify & Discuss",
+      "dryRun": "Dry Run & Complexity",
+      "label": "Phase {{phase}}",
+      "time": "Time:",
+      "space": "Space:"
+    },
+    "sayOutLoud": "Say this out loud",
+    "draftingScript": "Drafting your interview script…"
+  },
+  "queue": {
+    "errors": {
+      "loadScreenshots": "Failed to load existing screenshots",
+      "deleteScreenshot": "Failed to delete the screenshot file",
+      "processingFailed": "Processing Failed",
+      "processingFailedDesc": "There was an error processing your screenshots.",
+      "noScreenshots": "No Screenshots",
+      "noScreenshotsDesc": "There are no screenshots to process."
+    },
+    "chat": {
+      "intro": "Chat with {{model}}",
+      "hint1": "Take a screenshot (Cmd+H) for automatic analysis",
+      "hint2": "Click ⚙️ Models to switch AI providers",
+      "replying": "{{model}} is replying...",
+      "inputPlaceholder": "Type your message...",
+      "send": "Send",
+      "modelSwitched": "🔄 Switched to {{model}}. Ready for your questions!",
+      "analyzing_one": "📷 Analyzing {{count}} screenshot...",
+      "analyzing_other": "📷 Analyzing {{count}} screenshots..."
+    }
+  },
+  "meetingChat": {
+    "title": "Search this meeting",
+    "copyMessage": "Copy message",
+    "copied": "Copied",
+    "errors": {
+      "noResponse": "Couldn't get a response. Please try again.",
+      "checkSettings": "Couldn't get a response. Please check your settings.",
+      "generic": "Something went wrong. Please try again."
+    }
+  },
+  "meetingDetails": {
+    "tabs": {
+      "summary": "Summary",
+      "transcript": "Transcript",
+      "usage": "Usage",
+      "analysis": "Analysis"
+    },
+    "copy": {
+      "summary": "Copy full summary",
+      "transcript": "Copy full transcript",
+      "usage": "Copy usage",
+      "analysis": "Copy analysis",
+      "copied": "Copied"
+    },
+    "speaker": {
+      "me": "Me",
+      "them": "Them"
+    },
+    "actionItems": "Action Items",
+    "keyPoints": "Key Points",
+    "actionItemPlaceholder": "Type an action item...",
+    "keyPointPlaceholder": "Type a key point...",
+    "noUsage": "No token usage data recorded for this meeting.",
+    "askPlaceholder": "Ask about this meeting...",
+    "loading": "Loading meeting...",
+    "notFound": "Meeting not found",
+    "transcript": "Transcript",
+    "summary": "Summary",
+    "actionItems": "Action Items",
+    "questions": "Questions",
+    "decisions": "Decisions",
+    "share": "Share",
+    "delete": "Delete",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirmDelete": "Delete this meeting?",
+    "deleteWarning": "This cannot be undone.",
+    "noTranscript": "No transcript available",
+    "noSummary": "No summary yet",
+    "back": "Back",
+    "untitled": "Untitled Meeting"
+  },
+  "interface": {
+    "answerLabels": {
+      "codeSolution": "Code Solution",
+      "shortened": "Shortened",
+      "recap": "Recap",
+      "followUp": "Follow-Up Questions",
+      "sayThis": "Say this"
+    },
+    "warnings": {
+      "screenRecordingDenied": "Screen Recording Permission Denied",
+      "transcriptionNotConfigured": "Transcription Not Configured",
+      "sttNotConfiguredDescription": "No STT provider selected. Open Settings → Audio to pick one."
+    },
+    "messages": {
+      "screenshotAttached": "Screenshot attached",
+      "screenshotAttachedCount_one": "{{count}} screenshot attached",
+      "screenshotAttachedCount_other": "{{count}} screenshots attached",
+      "listening": "Listening...",
+      "askOrClickAnswer": "Ask a question or click Answer"
+    },
+    "quickActions": {
+      "whatToAnswer": "What to answer?",
+      "clarify": "Clarify",
+      "systemDesign": "System Design",
+      "brainstorm": "Brainstorm",
+      "recap": "Recap",
+      "followup": "Followup",
+      "stop": "Stop",
+      "answer": "Answer"
+    },
+    "input": {
+      "promptPrefix": "Ask anything on screen or conversation, or",
+      "promptSuffix": "for selective screenshot"
+    },
+    "presetMessages": {
+      "whatToSay": "What should I say about this?",
+      "codeHint": "Give me a code hint for this",
+      "brainstorm": "Brainstorm with this context",
+      "systemDesign": "Draw the system design",
+      "analyzeScreenshot": "Analyze this screenshot"
+    }
   },
   "settings": {
     "sidebar": {

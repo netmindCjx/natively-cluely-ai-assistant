@@ -1,6 +1,7 @@
 // Solutions.tsx — Rolling Interview Script / Teleprompter UI
 import React, { useState, useEffect, useRef } from "react"
 import { useQuery, useQueryClient } from "react-query"
+import { useTranslation } from "react-i18next"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism"
 
@@ -27,63 +28,75 @@ interface PhaseCardProps {
   children: React.ReactNode
 }
 
-const PhaseCard: React.FC<PhaseCardProps> = ({ phase, label, icon, accentClass, borderClass, children }) => (
-  <div className={`rounded-xl border ${borderClass} overflow-hidden`}>
-    {/* Header */}
-    <div className={`flex items-center gap-2 px-4 py-2.5 ${accentClass}`}>
-      <span className="text-base">{icon}</span>
-      <span className="text-[11px] font-bold uppercase tracking-widest opacity-80">Phase {phase}</span>
-      <span className="text-[12px] font-semibold">{label}</span>
+const PhaseCard: React.FC<PhaseCardProps> = ({ phase, label, icon, accentClass, borderClass, children }) => {
+  const { t } = useTranslation()
+  return (
+    <div className={`rounded-xl border ${borderClass} overflow-hidden`}>
+      {/* Header */}
+      <div className={`flex items-center gap-2 px-4 py-2.5 ${accentClass}`}>
+        <span className="text-base">{icon}</span>
+        <span className="text-[11px] font-bold uppercase tracking-widest opacity-80">{t("solutions.phases.label", { phase })}</span>
+        <span className="text-[12px] font-semibold">{label}</span>
+      </div>
+      {/* Body */}
+      <div className="px-4 py-3 bg-black/40">
+        {children}
+      </div>
     </div>
-    {/* Body */}
-    <div className="px-4 py-3 bg-black/40">
-      {children}
-    </div>
-  </div>
-)
+  )
+}
 
 // ─── Spoken Script Block ──────────────────────────────────────────────────────
 
-const SpokenScript: React.FC<{ text: string }> = ({ text }) => (
-  <div className="space-y-1.5">
-    <p className="text-[10px] font-semibold uppercase tracking-wider text-white/40">🎙️ Say this out loud</p>
-    <p className="text-[14px] leading-relaxed text-white/90 italic font-light">
-      {text}
-    </p>
-  </div>
-)
+const SpokenScript: React.FC<{ text: string }> = ({ text }) => {
+  const { t } = useTranslation()
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-white/40">🎙️ {t("solutions.sayOutLoud")}</p>
+      <p className="text-[14px] leading-relaxed text-white/90 italic font-light">
+        {text}
+      </p>
+    </div>
+  )
+}
 
 // ─── Complexity Pill ─────────────────────────────────────────────────────────
 
-const ComplexityRow: React.FC<{ time: string; space: string }> = ({ time, space }) => (
-  <div className="flex flex-wrap gap-2 mt-3">
-    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-600/20 border border-blue-500/30 text-[12px] font-medium text-blue-300">
-      <span className="opacity-60">⏱ Time:</span> <strong>{time}</strong>
-    </span>
-    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-600/20 border border-emerald-500/30 text-[12px] font-medium text-emerald-300">
-      <span className="opacity-60">💾 Space:</span> <strong>{space}</strong>
-    </span>
-  </div>
-)
+const ComplexityRow: React.FC<{ time: string; space: string }> = ({ time, space }) => {
+  const { t } = useTranslation()
+  return (
+    <div className="flex flex-wrap gap-2 mt-3">
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-600/20 border border-blue-500/30 text-[12px] font-medium text-blue-300">
+        <span className="opacity-60">⏱ {t("solutions.phases.time")}</span> <strong>{time}</strong>
+      </span>
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-600/20 border border-emerald-500/30 text-[12px] font-medium text-emerald-300">
+        <span className="opacity-60">💾 {t("solutions.phases.space")}</span> <strong>{space}</strong>
+      </span>
+    </div>
+  )
+}
 
 // ─── Loading Skeleton ─────────────────────────────────────────────────────────
 
-const ScriptLoader: React.FC = () => (
-  <div className="space-y-4 py-2">
-    <p className="text-[13px] text-center bg-gradient-to-r from-violet-300 via-white to-violet-300 bg-clip-text text-transparent animate-pulse font-medium">
-      ✍️ Drafting your interview script…
-    </p>
-    {[1, 2, 3, 4].map(i => (
-      <div key={i} className="rounded-xl border border-white/10 overflow-hidden opacity-40" style={{ animation: `pulse 1.5s ease-in-out ${i * 0.15}s infinite` }}>
-        <div className="h-8 bg-white/5" />
-        <div className="px-4 py-3 space-y-2">
-          <div className="h-3 bg-white/10 rounded w-3/4" />
-          <div className="h-3 bg-white/10 rounded w-1/2" />
+const ScriptLoader: React.FC = () => {
+  const { t } = useTranslation()
+  return (
+    <div className="space-y-4 py-2">
+      <p className="text-[13px] text-center bg-gradient-to-r from-violet-300 via-white to-violet-300 bg-clip-text text-transparent animate-pulse font-medium">
+        ✍️ {t("solutions.draftingScript")}
+      </p>
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} className="rounded-xl border border-white/10 overflow-hidden opacity-40" style={{ animation: `pulse 1.5s ease-in-out ${i * 0.15}s infinite` }}>
+          <div className="h-8 bg-white/5" />
+          <div className="px-4 py-3 space-y-2">
+            <div className="h-3 bg-white/10 rounded w-3/4" />
+            <div className="h-3 bg-white/10 rounded w-1/2" />
+          </div>
         </div>
-      </div>
-    ))}
-  </div>
-)
+      ))}
+    </div>
+  )
+}
 
 // ─── Module ───────────────────────────────────────────────────────────────────
 
@@ -92,6 +105,7 @@ interface SolutionsProps {
 }
 
 const Solutions: React.FC<SolutionsProps> = ({ setView }) => {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const contentRef = useRef<HTMLDivElement>(null)
 
@@ -207,7 +221,7 @@ const Solutions: React.FC<SolutionsProps> = ({ setView }) => {
       // Error
       window.electronAPI.onSolutionError((error: string) => {
         setIsGenerating(false)
-        showToast("Generation Failed", "Couldn't generate the interview script. Try again.", "error")
+        showToast(t("solutions.errors.generationFailed"), t("solutions.errors.generationFailedDesc"), "error")
         console.error("Solution error:", error)
         const cached = queryClient.getQueryData<Solution>(["solution"])
         if (!cached) setView("queue")
@@ -221,12 +235,12 @@ const Solutions: React.FC<SolutionsProps> = ({ setView }) => {
         setDebugProcessing(false)
       }),
       window.electronAPI.onDebugError(() => {
-        showToast("Debug Failed", "There was an error debugging your code.", "error")
+        showToast(t("solutions.errors.debugFailed"), t("solutions.errors.debugFailedDesc"), "error")
         setDebugProcessing(false)
       }),
 
       window.electronAPI.onProcessingNoScreenshots(() => {
-        showToast("No Screenshots", "There are no screenshots to process.", "neutral")
+        showToast(t("solutions.errors.noScreenshots"), t("solutions.errors.noScreenshotsDesc"), "neutral")
       }),
     ]
 
@@ -297,7 +311,7 @@ const Solutions: React.FC<SolutionsProps> = ({ setView }) => {
                 {/* Phase 1 — Understand */}
                 <PhaseCard
                   phase={1}
-                  label="Understand the Problem"
+                  label={t("solutions.phases.understand")}
                   icon="🧠"
                   accentClass="bg-sky-900/40 text-sky-200"
                   borderClass="border-sky-700/30"
@@ -308,7 +322,7 @@ const Solutions: React.FC<SolutionsProps> = ({ setView }) => {
                 {/* Phase 2 — Brainstorm */}
                 <PhaseCard
                   phase={2}
-                  label="Brainstorm Approaches"
+                  label={t("solutions.phases.brainstorm")}
                   icon="💡"
                   accentClass="bg-violet-900/40 text-violet-200"
                   borderClass="border-violet-700/30"
@@ -319,7 +333,7 @@ const Solutions: React.FC<SolutionsProps> = ({ setView }) => {
                 {/* Phase 3 — Implement */}
                 <PhaseCard
                   phase={3}
-                  label="Write the Code"
+                  label={t("solutions.phases.writeCode")}
                   icon="⌨️"
                   accentClass="bg-zinc-800/60 text-zinc-200"
                   borderClass="border-zinc-600/30"
@@ -349,7 +363,7 @@ const Solutions: React.FC<SolutionsProps> = ({ setView }) => {
                 {/* Phase 4 — Verify */}
                 <PhaseCard
                   phase={4}
-                  label="Dry Run & Complexity"
+                  label={t("solutions.phases.dryRun")}
                   icon="✅"
                   accentClass="bg-emerald-900/40 text-emerald-200"
                   borderClass="border-emerald-700/30"

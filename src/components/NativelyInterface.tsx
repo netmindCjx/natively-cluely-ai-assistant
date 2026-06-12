@@ -45,6 +45,7 @@ import 'katex/dist/katex.min.css';
 import { analytics, detectProviderType } from '../lib/analytics/analytics.service';
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
+import { useTranslation } from 'react-i18next';
 import { getOverlayAppearance, OVERLAY_OPACITY_DEFAULT } from '../lib/overlayAppearance';
 
 interface Message {
@@ -74,6 +75,7 @@ interface NativelyInterfaceProps {
 }
 
 const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, overlayOpacity = OVERLAY_OPACITY_DEFAULT }) => {
+    const { t } = useTranslation();
     const isLightTheme = useResolvedTheme() === 'light';
     const [isExpanded, setIsExpanded] = useState(true);
     const [inputValue, setInputValue] = useState('');
@@ -840,7 +842,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'user',
-                text: 'What should I say about this?',
+                text: t('interface.presetMessages.whatToSay'),
                 hasScreenshot: true,
                 screenshotPreview: currentAttachments[0].preview
             }]);
@@ -948,7 +950,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'user',
-                text: 'Give me a code hint for this',
+                text: t('interface.presetMessages.codeHint'),
                 hasScreenshot: true,
                 screenshotPreview: currentAttachments[0].preview
             }]);
@@ -983,7 +985,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'user',
-                text: 'Brainstorm with this context',
+                text: t('interface.presetMessages.brainstorm'),
                 hasScreenshot: true,
                 screenshotPreview: currentAttachments[0].preview
             }]);
@@ -1017,7 +1019,7 @@ const NativelyInterface: React.FC<NativelyInterfaceProps> = ({ onEndMeeting, ove
             setMessages(prev => [...prev, {
                 id: Date.now().toString(),
                 role: 'user',
-                text: 'Draw the system design',
+                text: t('interface.presetMessages.systemDesign'),
                 hasScreenshot: true,
                 screenshotPreview: currentAttachments[0].preview
             }]);
@@ -1408,7 +1410,7 @@ Provide only the answer, nothing else.`;
         setMessages(prev => [...prev, {
             id: Date.now().toString(),
             role: 'user',
-            text: userText || (currentAttachments.length > 0 ? 'Analyze this screenshot' : ''),
+            text: userText || (currentAttachments.length > 0 ? t('interface.presetMessages.analyzeScreenshot') : ''),
             hasScreenshot: currentAttachments.length > 0,
             screenshotPreview: currentAttachments[0]?.preview
         }]);
@@ -1442,7 +1444,7 @@ Provide only the answer, nothing else.`;
             // Pass imagePath if attached, AND conversation context
             requestStartTimeRef.current = Date.now();
             await window.electronAPI.streamGeminiChat(
-                userText || 'Analyze this screenshot',
+                userText || t('interface.presetMessages.analyzeScreenshot'),
                 currentAttachments.length > 0 ? currentAttachments.map(s => s.path) : undefined,
                 conversationContext // Pass context so "answer this" works
             );
@@ -1501,7 +1503,7 @@ Provide only the answer, nothing else.`;
                 <div className={`rounded-lg p-3 my-1 border ${subtleSurfaceClass}`} style={appearance.subtleStyle}>
                     <div className={`flex items-center gap-2 mb-2 font-semibold text-xs uppercase tracking-wide ${isLightTheme ? 'text-violet-600' : 'text-purple-300'}`}>
                         <Code className="w-3.5 h-3.5" />
-                        <span>Code Solution</span>
+                        <span>{t('interface.answerLabels.codeSolution')}</span>
                     </div>
                     <div className={`space-y-2 text-[13px] leading-relaxed ${isLightTheme ? 'text-slate-800' : 'text-slate-200'}`}>
                         {parts.map((part, i) => {
@@ -1579,7 +1581,7 @@ Provide only the answer, nothing else.`;
                 <div className={`rounded-lg p-3 my-1 border ${subtleSurfaceClass}`} style={appearance.subtleStyle}>
                     <div className={`flex items-center gap-2 mb-2 font-semibold text-xs uppercase tracking-wide ${isLightTheme ? 'text-cyan-700' : 'text-cyan-300'}`}>
                         <MessageSquare className="w-3.5 h-3.5" />
-                        <span>Shortened</span>
+                        <span>{t('interface.answerLabels.shortened')}</span>
                     </div>
                     <div className={`text-[13px] leading-relaxed markdown-content ${isLightTheme ? 'text-slate-800' : 'text-slate-200'}`}>
                         <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={{
@@ -1600,7 +1602,7 @@ Provide only the answer, nothing else.`;
                 <div className={`rounded-lg p-3 my-1 border ${subtleSurfaceClass}`} style={appearance.subtleStyle}>
                     <div className={`flex items-center gap-2 mb-2 font-semibold text-xs uppercase tracking-wide ${isLightTheme ? 'text-indigo-700' : 'text-indigo-300'}`}>
                         <RefreshCw className="w-3.5 h-3.5" />
-                        <span>Recap</span>
+                        <span>{t('interface.answerLabels.recap')}</span>
                     </div>
                     <div className={`text-[13px] leading-relaxed markdown-content ${isLightTheme ? 'text-slate-800' : 'text-slate-200'}`}>
                         <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={{
@@ -1621,7 +1623,7 @@ Provide only the answer, nothing else.`;
                 <div className={`rounded-lg p-3 my-1 border ${subtleSurfaceClass}`} style={appearance.subtleStyle}>
                     <div className={`flex items-center gap-2 mb-2 font-semibold text-xs uppercase tracking-wide ${isLightTheme ? 'text-amber-700' : 'text-[#FFD60A]'}`}>
                         <HelpCircle className="w-3.5 h-3.5" />
-                        <span>Follow-Up Questions</span>
+                        <span>{t('interface.answerLabels.followUp')}</span>
                     </div>
                     <div className={`text-[13px] leading-relaxed markdown-content ${isLightTheme ? 'text-slate-800' : 'text-slate-200'}`}>
                         <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={{
@@ -1644,7 +1646,7 @@ Provide only the answer, nothing else.`;
             return (
                 <div className={`rounded-lg p-3 my-1 border ${subtleSurfaceClass}`} style={appearance.subtleStyle}>
                     <div className="flex items-center gap-2 mb-2 text-emerald-400 font-semibold text-xs uppercase tracking-wide">
-                        <span>Say this</span>
+                        <span>{t('interface.answerLabels.sayThis')}</span>
                     </div>
                     <div className="text-[14px] leading-relaxed overlay-text-primary">
                         {parts.map((part, i) => {
@@ -2097,7 +2099,7 @@ Provide only the answer, nothing else.`;
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                                 </svg>
                                             </div>
-                                            <span>Screen Recording Permission Denied</span>
+                                            <span>{t('interface.warnings.screenRecordingDenied')}</span>
                                         </div>
                                         <p className="text-[11px] text-yellow-600/70 dark:text-yellow-400/60 leading-snug pl-[26px]">
                                             {systemAudioWarning}
@@ -2108,12 +2110,12 @@ Provide only the answer, nothing else.`;
                                             onClick={() => { window.electronAPI.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'); }}
                                             className="px-3 py-1.5 rounded-lg bg-yellow-500/15 hover:bg-yellow-500/25 text-yellow-700 dark:text-yellow-500 text-[11px] font-semibold transition-all active:scale-95 border border-yellow-500/20 shadow-sm"
                                         >
-                                            Open Settings
+                                            {t('common.openSettings')}
                                         </button>
-                                        <button 
+                                        <button
                                             onClick={() => setSystemAudioWarning(null)}
                                             className="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-yellow-600/50 hover:text-yellow-700 dark:text-yellow-500/50 dark:hover:text-yellow-400 transition-colors absolute top-1 right-1 opacity-0 group-hover/warning:opacity-100"
-                                            title="Dismiss"
+                                            title={t('common.dismiss')}
                                         >
                                             <X className="w-3 h-3" />
                                         </button>
@@ -2131,10 +2133,10 @@ Provide only the answer, nothing else.`;
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                                                 </svg>
                                             </div>
-                                            <span>Transcription Not Configured</span>
+                                            <span>{t('interface.warnings.transcriptionNotConfigured')}</span>
                                         </div>
                                         <p className="text-[11px] text-orange-600/70 dark:text-orange-400/60 leading-snug pl-[26px]">
-                                            No STT provider selected. Open Settings → Audio to pick one.
+                                            {t('interface.warnings.sttNotConfiguredDescription')}
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
@@ -2142,12 +2144,12 @@ Provide only the answer, nothing else.`;
                                             onClick={() => { window.electronAPI?.toggleSettingsWindow?.(); }}
                                             className="px-3 py-1.5 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 text-orange-700 dark:text-orange-500 text-[11px] font-semibold transition-all active:scale-95 border border-orange-500/20 shadow-sm"
                                         >
-                                            Open Settings
+                                            {t('common.openSettings')}
                                         </button>
                                         <button
                                             onClick={() => setSttNotConfigured(false)}
                                             className="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-orange-600/50 hover:text-orange-700 dark:text-orange-500/50 dark:hover:text-orange-400 transition-colors absolute top-1 right-1 opacity-0 group-hover/stt-warning:opacity-100"
-                                            title="Dismiss"
+                                            title={t('common.dismiss')}
                                         >
                                             <X className="w-3 h-3" />
                                         </button>
@@ -2199,21 +2201,21 @@ Provide only the answer, nothing else.`;
                     `}>
                                                 {msg.role === 'interviewer' && (
                                                     <div className="flex items-center gap-1.5 mb-1 text-[10px] font-medium uppercase tracking-wider overlay-text-muted">
-                                                        Interviewer
+                                                        {t('common.interviewer')}
                                                         {msg.isStreaming && <span className="w-1 h-1 bg-green-500 rounded-full animate-pulse" />}
                                                     </div>
                                                 )}
                                                 {msg.role === 'user' && msg.hasScreenshot && (
                                                     <div className={`flex items-center gap-1 text-[10px] opacity-70 mb-1 border-b pb-1 ${isLightTheme ? 'border-black/10' : 'border-white/10'}`}>
                                                         <Image className="w-2.5 h-2.5" />
-                                                        <span>Screenshot attached</span>
+                                                        <span>{t('interface.messages.screenshotAttached')}</span>
                                                     </div>
                                                 )}
                                                 {msg.role === 'system' && !msg.isStreaming && (
                                                     <button
                                                         onClick={() => handleCopy(msg.text)}
                                                         className="absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive"
-                                                        title="Copy to clipboard"
+                                                        title={t('common.copyToClipboard')}
                                                         style={appearance.iconStyle}
                                                     >
                                                         <Copy className="w-3.5 h-3.5" />
@@ -2239,7 +2241,7 @@ Provide only the answer, nothing else.`;
                                                 <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                                                 <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                                                 <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                                                <span className="text-[10px] text-emerald-400/70 ml-1">Listening...</span>
+                                                <span className="text-[10px] text-emerald-400/70 ml-1">{t('interface.messages.listening')}</span>
                                             </div>
                                         </div>
                                     )}
@@ -2260,22 +2262,22 @@ Provide only the answer, nothing else.`;
                             {/* Quick Actions - Minimal & Clean */}
                             <div className={`flex flex-nowrap justify-center items-center gap-1.5 px-4 pb-3 overflow-x-hidden ${rollingTranscript && showTranscript ? 'pt-1' : 'pt-3'}`}>
                                 <button onClick={handleWhatToSay} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all active:scale-95 duration-200 interaction-base interaction-press whitespace-nowrap shrink-0 ${quickActionClass}`} style={appearance.chipStyle}>
-                                    <Pencil className="w-3 h-3 opacity-70" /> What to answer?
+                                    <Pencil className="w-3 h-3 opacity-70" /> {t('interface.quickActions.whatToAnswer')}
                                 </button>
                                 <button onClick={handleClarify} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all active:scale-95 duration-200 interaction-base interaction-press whitespace-nowrap shrink-0 ${quickActionClass}`} style={appearance.chipStyle}>
-                                    <MessageSquare className="w-3 h-3 opacity-70" /> Clarify
+                                    <MessageSquare className="w-3 h-3 opacity-70" /> {t('interface.quickActions.clarify')}
                                 </button>
                                 <button onClick={handleSystemDesign} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all active:scale-95 duration-200 interaction-base interaction-press whitespace-nowrap shrink-0 ${quickActionClass}`} style={appearance.chipStyle}>
-                                    <Network className="w-3 h-3 opacity-70" /> System Design
+                                    <Network className="w-3 h-3 opacity-70" /> {t('interface.quickActions.systemDesign')}
                                 </button>
                                 <button onClick={actionButtonMode === 'brainstorm' ? handleBrainstorm : handleRecap} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all active:scale-95 duration-200 interaction-base interaction-press whitespace-nowrap shrink-0 ${quickActionClass}`} style={appearance.chipStyle}>
                                     {actionButtonMode === 'brainstorm'
-                                        ? <><Lightbulb className="w-3 h-3 opacity-70" /> Brainstorm</>
-                                        : <><RefreshCw className="w-3 h-3 opacity-70" /> Recap</>
+                                        ? <><Lightbulb className="w-3 h-3 opacity-70" /> {t('interface.quickActions.brainstorm')}</>
+                                        : <><RefreshCw className="w-3 h-3 opacity-70" /> {t('interface.quickActions.recap')}</>
                                     }
                                 </button>
                                 <button onClick={handleFollowUpQuestions} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all active:scale-95 duration-200 interaction-base interaction-press whitespace-nowrap shrink-0 ${quickActionClass}`} style={appearance.chipStyle}>
-                                    <HelpCircle className="w-3 h-3 opacity-70" /> Followup
+                                    <HelpCircle className="w-3 h-3 opacity-70" /> {t('interface.quickActions.followup')}
                                 </button>
                                 <button
                                     onClick={handleAnswerNow}
@@ -2288,10 +2290,10 @@ Provide only the answer, nothing else.`;
                                     {isManualRecording ? (
                                         <>
                                             <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-                                            Stop
+                                            {t('interface.quickActions.stop')}
                                         </>
                                     ) : (
-                                        <><Zap className="w-3 h-3 opacity-70" /> Answer</>
+                                        <><Zap className="w-3 h-3 opacity-70" /> {t('interface.quickActions.answer')}</>
                                     )}
                                 </button>
                             </div>
@@ -2303,12 +2305,12 @@ Provide only the answer, nothing else.`;
                                     <div className={`mb-2 rounded-lg p-2 transition-all duration-200 border ${subtleSurfaceClass}`} style={appearance.subtleStyle}>
                                         <div className="flex items-center justify-between mb-1.5">
                                             <span className="text-[11px] font-medium overlay-text-primary">
-                                                {attachedContext.length} screenshot{attachedContext.length > 1 ? 's' : ''} attached
+                                                {t('interface.messages.screenshotAttachedCount', { count: attachedContext.length })}
                                             </span>
                                             <button
                                                 onClick={() => setAttachedContext([])}
                                                 className="p-1 rounded-full transition-colors overlay-icon-surface overlay-icon-surface-hover overlay-text-interactive"
-                                                title="Remove all"
+                                                title={t('common.removeAll')}
                                                 style={appearance.iconStyle}
                                             >
                                                 <X className="w-3.5 h-3.5" />
@@ -2325,14 +2327,14 @@ Provide only the answer, nothing else.`;
                                                     <button
                                                         onClick={() => setAttachedContext(prev => prev.filter((_, i) => i !== idx))}
                                                         className="absolute -top-1 -right-1 w-4 h-4 bg-red-500/80 hover:bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity"
-                                                        title="Remove"
+                                                        title={t('common.remove')}
                                                     >
                                                         <X className="w-2.5 h-2.5 text-white" />
                                                     </button>
                                                 </div>
                                             ))}
                                         </div>
-                                        <span className="text-[10px] overlay-text-muted">Ask a question or click Answer</span>
+                                        <span className="text-[10px] overlay-text-muted">{t('interface.messages.askOrClickAnswer')}</span>
                                     </div>
                                 )}
 
@@ -2351,7 +2353,7 @@ Provide only the answer, nothing else.`;
                                     {/* Custom Rich Placeholder */}
                                     {!inputValue && (
                                         <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-[13px] overlay-text-muted">
-                                            <span>Ask anything on screen or conversation, or</span>
+                                            <span>{t('interface.input.promptPrefix')}</span>
                                             <div className="flex items-center gap-1 opacity-80">
                                                 {(shortcuts.selectiveScreenshot || ['⌘', 'Shift', 'H']).map((key, i) => (
                                                     <React.Fragment key={i}>
@@ -2360,7 +2362,7 @@ Provide only the answer, nothing else.`;
                                                     </React.Fragment>
                                                 ))}
                                             </div>
-                                            <span>for selective screenshot</span>
+                                            <span>{t('interface.input.promptSuffix')}</span>
                                         </div>
                                     )}
 

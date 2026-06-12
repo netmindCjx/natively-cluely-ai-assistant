@@ -1,6 +1,7 @@
 // Debug.tsx
 import React, { useState, useEffect, useRef } from "react"
 import { useQuery, useQueryClient } from "react-query"
+import { useTranslation } from "react-i18next"
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter"
 import { dracula } from "react-syntax-highlighter/dist/esm/styles/prism"
 import ScreenshotQueue from "../components/Queue/ScreenshotQueue"
@@ -15,36 +16,42 @@ import ExtraScreenshotsQueueHelper from "../components/Solutions/SolutionCommand
 import { diffLines } from "diff"
 
 // Inline section components (moved out of Solutions.tsx)
-const ContentSection = ({ title, content, isLoading }: { title: string; content: React.ReactNode; isLoading: boolean }) => (
-  <div className="space-y-2">
-    <h2 className="text-[13px] font-medium text-white tracking-wide">{title}</h2>
-    {isLoading ? (
-      <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">Loading...</p>
-    ) : (
-      <div className="text-[13px] leading-[1.4] text-gray-100 max-w-[600px]">{content}</div>
-    )}
-  </div>
-)
+const ContentSection = ({ title, content, isLoading }: { title: string; content: React.ReactNode; isLoading: boolean }) => {
+  const { t } = useTranslation()
+  return (
+    <div className="space-y-2">
+      <h2 className="text-[13px] font-medium text-white tracking-wide">{title}</h2>
+      {isLoading ? (
+        <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">{t("common.loading")}</p>
+      ) : (
+        <div className="text-[13px] leading-[1.4] text-gray-100 max-w-[600px]">{content}</div>
+      )}
+    </div>
+  )
+}
 
-const ComplexitySection = ({ timeComplexity, spaceComplexity, isLoading }: { timeComplexity: string | null; spaceComplexity: string | null; isLoading: boolean }) => (
-  <div className="space-y-2">
-    <h2 className="text-[13px] font-medium text-white tracking-wide">Complexity</h2>
-    {isLoading ? (
-      <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">Calculating complexity...</p>
-    ) : (
-      <div className="space-y-1">
-        <div className="flex items-start gap-2 text-[13px] leading-[1.4] text-gray-100">
-          <div className="w-1 h-1 rounded-full bg-blue-400/80 mt-2 shrink-0" />
-          <div><strong>Time:</strong> {timeComplexity}</div>
+const ComplexitySection = ({ timeComplexity, spaceComplexity, isLoading }: { timeComplexity: string | null; spaceComplexity: string | null; isLoading: boolean }) => {
+  const { t } = useTranslation()
+  return (
+    <div className="space-y-2">
+      <h2 className="text-[13px] font-medium text-white tracking-wide">{t("debug.complexity")}</h2>
+      {isLoading ? (
+        <p className="text-xs bg-gradient-to-r from-gray-300 via-gray-100 to-gray-300 bg-clip-text text-transparent animate-pulse">{t("debug.calculating")}</p>
+      ) : (
+        <div className="space-y-1">
+          <div className="flex items-start gap-2 text-[13px] leading-[1.4] text-gray-100">
+            <div className="w-1 h-1 rounded-full bg-blue-400/80 mt-2 shrink-0" />
+            <div><strong>{t("debug.time")}</strong> {timeComplexity}</div>
+          </div>
+          <div className="flex items-start gap-2 text-[13px] leading-[1.4] text-gray-100">
+            <div className="w-1 h-1 rounded-full bg-blue-400/80 mt-2 shrink-0" />
+            <div><strong>{t("debug.space")}</strong> {spaceComplexity}</div>
+          </div>
         </div>
-        <div className="flex items-start gap-2 text-[13px] leading-[1.4] text-gray-100">
-          <div className="w-1 h-1 rounded-full bg-blue-400/80 mt-2 shrink-0" />
-          <div><strong>Space:</strong> {spaceComplexity}</div>
-        </div>
-      </div>
-    )}
-  </div>
-)
+      )}
+    </div>
+  )
+}
 
 type DiffLine = {
   value: string
@@ -234,6 +241,7 @@ interface DebugProps {
 }
 
 const Debug: React.FC<DebugProps> = ({ isProcessing, setIsProcessing }) => {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const contentRef = useRef<HTMLDivElement>(null)
 
@@ -331,8 +339,8 @@ const Debug: React.FC<DebugProps> = ({ isProcessing, setIsProcessing }) => {
       }),
       window.electronAPI.onDebugError((error: string) => {
         showToast(
-          "Processing Failed",
-          "There was an error debugging your code.",
+          t("debug.errors.processingFailed"),
+          t("debug.errors.processingFailedDesc"),
           "error"
         )
         setIsProcessing(false)
@@ -409,7 +417,7 @@ const Debug: React.FC<DebugProps> = ({ isProcessing, setIsProcessing }) => {
           <div className="px-4 py-3 space-y-4">
             {/* Thoughts Section */}
             <ContentSection
-              title="What I Changed"
+              title={t("debug.whatChanged")}
               content={
                 thoughtsData && (
                   <div className="space-y-3">
