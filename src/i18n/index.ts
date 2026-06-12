@@ -29,10 +29,24 @@ i18n.use(initReactI18next).init({
   returnNull: false,
 });
 
+// Map app language → AI response language code (matches AI_RESPONSE_LANGUAGES in electron/config/languages.ts)
+const APP_TO_AI_LANGUAGE: Record<SupportedLanguage, string> = {
+  en: 'English',
+  zh: 'Chinese',
+};
+
 export const setAppLanguage = (lng: SupportedLanguage) => {
   localStorage.setItem(LANGUAGE_STORAGE_KEY, lng);
   i18n.changeLanguage(lng);
   document.documentElement.setAttribute('lang', lng);
+  // Sync AI response language so the model replies in the user's UI language.
+  // The backend is authoritative; we fire-and-forget — if the IPC isn't ready
+  // yet (e.g. boot), the next interaction will use the persisted value anyway.
+  const aiLang = APP_TO_AI_LANGUAGE[lng];
+  if (aiLang && typeof window !== 'undefined') {
+    // @ts-ignore - electronAPI surface is loose in renderer
+    window.electronAPI?.setAiResponseLanguage?.(aiLang)?.catch?.(() => {});
+  }
 };
 
 document.documentElement.setAttribute('lang', i18n.language);
