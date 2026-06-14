@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ToggleLeft, ToggleRight, Search, Zap, Calendar, ArrowRight, ArrowLeft, MoreHorizontal, Globe, Clock, ChevronRight, Settings, LayoutGrid, RefreshCw, Eye, EyeOff, Ghost, Plus, Mail, Link as LinkIcon, ChevronDown, Trash2, Bell, Check, Download, DownloadCloud, CheckCircle, AlertCircle } from 'lucide-react';
+import { ToggleLeft, ToggleRight, Search, Zap, Calendar, ArrowRight, MoreHorizontal, Globe, Clock, ChevronRight, Settings, LayoutGrid, RefreshCw, Eye, EyeOff, Ghost, Plus, Mail, Link as LinkIcon, ChevronDown, Trash2, Bell, Check, Download, DownloadCloud, CheckCircle, AlertCircle, Briefcase, User, Keyboard, LogOut } from 'lucide-react';
+import { useAuthContext } from '../contexts/AuthContext';
+import AccountView from './auth/AccountView';
 import { generateMeetingPDF } from '../utils/pdfGenerator';
 import icon from "./icon.png";
 import mainui from "../UI_comp/mainui.png";
@@ -9,12 +11,15 @@ import ConnectCalendarButton from './ui/ConnectCalendarButton';
 import MeetingDetails from './MeetingDetails';
 import TopSearchPill from './TopSearchPill';
 import GlobalChatOverlay from './GlobalChatOverlay';
+import ProfileView from './ProfileView';
+import ShortcutsView from './ShortcutsView';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FeatureSpotlight } from './FeatureSpotlight';
 import { analytics } from '../lib/analytics/analytics.service'; // Added analytics import
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 import { isMac } from '../utils/platformUtils';
+import { formatLocalizedDate, getDateLocale, getDisplayMeetingTitle } from '../utils/localizedDisplay';
 import WindowControls from './WindowControls';
 
 interface Meeting {
@@ -51,10 +56,12 @@ interface LauncherProps {
     ollamaPullStatus?: 'idle' | 'downloading' | 'complete' | 'failed';
     ollamaPullPercent?: number;
     ollamaPullMessage?: string;
+    // Optional external request to switch the sidebar view (e.g. ads jumping to Profile)
+    viewRequest?: { view: 'meetings' | 'profile'; nonce: number };
 }
 
 // Helper to format date groups — returns a canonical key ("Today"/"Yesterday") or a localized date.
-const getGroupLabel = (dateStr: string) => {
+const getGroupLabel = (dateStr: string, language: string) => {
     if (dateStr === "Today") return "Today"; // Backward compatibility
 
     const date = new Date(dateStr);
@@ -68,18 +75,30 @@ const getGroupLabel = (dateStr: string) => {
     if (checkDate.getTime() === today.getTime()) return "Today";
     if (checkDate.getTime() === yesterday.getTime()) return "Yesterday";
 
-    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    return formatLocalizedDate(date, language, { weekday: 'short', month: 'short', day: 'numeric' });
 };
 
 // Helper to format time (e.g. 3:14pm) — accepts a translator for the legacy "Just now" label
-const formatTime = (dateStr: string, justNowLabel: string) => {
+const formatTime = (dateStr: string, justNowLabel: string, language: string) => {
     if (dateStr === "Today") return justNowLabel; // Legacy
     const date = new Date(dateStr);
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
+    return date.toLocaleTimeString(getDateLocale(language), {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: !language.toLowerCase().startsWith('zh')
+    }).toLowerCase();
 };
 
-const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onOpenModes, onPageChange, ollamaPullStatus = 'idle', ollamaPullPercent = 0, ollamaPullMessage = '' }) => {
-    const { t } = useTranslation();
+// Mask CN mainland phone numbers for sidebar display: keep first 3 and last 4 digits.
+// Accepts bare 11-digit ("13800138000") or with +86 prefix; returns formatted "138 **** 8000".
+function maskPhone(phone: string): string {
+    const digits = phone.replace(/\D/g, '').slice(-11);
+    if (digits.length !== 11) return phone;
+    return `${digits.slice(0, 3)} **** ${digits.slice(7)}`;
+}
+
+const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onPageChange, ollamaPullStatus = 'idle', ollamaPullPercent = 0, ollamaPullMessage = '', viewRequest }) => {
+    const { t, i18n } = useTranslation();
     const [meetings, setMeetings] = useState<Meeting[]>([]);
     const [isDetectable, setIsDetectable] = useState(false);
     const [isMeetingActive, setIsMeetingActive] = useState(false);
@@ -96,6 +115,19 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     const [submittedGlobalQuery, setSubmittedGlobalQuery] = useState('');
 
     const [showModesOnboarding, setShowModesOnboarding] = useState(false);
+
+    // Left sidebar view selector
+    const [sidebarView, setSidebarView] = useState<'meetings' | 'profile' | 'shortcuts' | 'account'>('meetings');
+
+    // Sync external view request (e.g. ads jumping to Profile) into the local sidebar state.
+    // Keyed off `nonce` so the same view can be requested again later.
+    useEffect(() => {
+        if (viewRequest) {
+            setSidebarView(viewRequest.view);
+            setSelectedMeeting(null);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [viewRequest?.nonce]);
 
     const fetchMeetings = () => {
         if (window.electronAPI && window.electronAPI.getRecentMeetings) {
@@ -135,6 +167,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     // Keybinds
     const { isShortcutPressed } = useShortcuts();
     const isLight = useResolvedTheme() === 'light';
+    const { auth: currentUser, logout: signOut } = useAuthContext();
     useEffect(() => {
         let mounted = true;
         console.log("Launcher mounted");
@@ -272,7 +305,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
     // Group meetings
     const groupedMeetings = meetings.reduce((acc, meeting) => {
-        const label = getGroupLabel(meeting.date);
+        const label = getGroupLabel(meeting.date, i18n.language);
         if (!acc[label]) acc[label] = [];
         acc[label].push(meeting);
         return acc;
@@ -286,12 +319,10 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         if (b === 'Today') return 1;
         if (a === 'Yesterday') return -1;
         if (b === 'Yesterday') return 1;
-        // Approximation for others: parse date
-        return new Date(b).getTime() - new Date(a).getTime();
+        return 0;
     });
 
 
-    const [forwardMeeting, setForwardMeeting] = useState<Meeting | null>(null);
     const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
     const [menuEntered, setMenuEntered] = useState(false);
 
@@ -309,12 +340,11 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     // Notify parent if we are on the main launcher list view
     useEffect(() => {
         if (onPageChange) {
-            onPageChange(!selectedMeeting && !isGlobalChatOpen);
+            onPageChange(!selectedMeeting && !isGlobalChatOpen && sidebarView === 'meetings');
         }
-    }, [selectedMeeting, isGlobalChatOpen, onPageChange]);
+    }, [selectedMeeting, isGlobalChatOpen, sidebarView, onPageChange]);
 
     const handleOpenMeeting = async (meeting: Meeting) => {
-        setForwardMeeting(null); // Clear forward history on new navigation
         console.log("[Launcher] Opening meeting:", meeting.id);
         analytics.trackCommandExecuted('open_meeting_details');
 
@@ -341,15 +371,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
     };
 
     const handleBack = () => {
-        setForwardMeeting(selectedMeeting);
         setSelectedMeeting(null);
-    };
-
-    const handleForward = () => {
-        if (forwardMeeting) {
-            setSelectedMeeting(forwardMeeting);
-            setForwardMeeting(null);
-        }
     };
 
     // Helper to format duration to mm:ss or mmm:ss
@@ -378,37 +400,9 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
         <div className="h-full w-full flex flex-col bg-bg-primary text-text-primary font-sans overflow-hidden selection:bg-accent-secondary/30">
             {/* 1. Header (Static) */}
             <header className="relative w-full h-[40px] shrink-0 flex items-center justify-between pl-0 drag-region select-none bg-bg-secondary border-b border-border-subtle z-[200]">
-                {/* Left: Spacing for Traffic Lights + Navigation Arrows */}
+                {/* Left: Spacing for Traffic Lights */}
                 <div className="flex items-center gap-1 no-drag">
                     {isMac && <div className="w-[70px]" />} {/* Traffic Light Spacer (macOS only) */}
-
-                    {/* Back Button */}
-                    <button
-                        onClick={selectedMeeting ? handleBack : undefined}
-                        disabled={!selectedMeeting}
-                        className={`
-                            transition-all duration-300 p-1 flex items-center justify-center mt-1 ml-2
-                            ${selectedMeeting
-                                ? `text-text-secondary hover:text-text-primary ${isLight ? 'hover:drop-shadow-[0_0_6px_rgba(0,0,0,0.25)]' : 'hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'}`
-                                : 'text-text-tertiary opacity-50 cursor-default'}
-                        `}
-                    >
-                        <ArrowLeft size={16} />
-                    </button>
-
-                    {/* Forward Button */}
-                    <button
-                        onClick={handleForward}
-                        disabled={!forwardMeeting}
-                        className={`
-                            transition-all duration-300 p-1 flex items-center justify-center mt-1
-                            ${forwardMeeting
-                                ? `text-text-secondary hover:text-text-primary ${isLight ? 'hover:drop-shadow-[0_0_6px_rgba(0,0,0,0.25)]' : 'hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'}`
-                                : 'text-text-tertiary opacity-0 cursor-default'}
-                        `}
-                    >
-                        <ArrowRight size={16} />
-                    </button>
                 </div>
 
 
@@ -438,127 +432,114 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
 
                 {/* Right: Actions */}
                 <div className={`flex items-center gap-1 no-drag shrink-0 ${isMac ? 'mr-1' : ''}`}>
-                    <div className="relative group/modes-btn select-none">
-                        <button
-                            onClick={() => {
-                                setShowModesOnboarding(false);
-                                localStorage.setItem('natively_seen_modes_onboarding_v5', 'true');
-                                onOpenModes?.();
-                            }}
-                            title={t('launcher.modesTitle')}
-                            className={`p-2 text-text-secondary hover:text-text-primary transition-all duration-300 ${isLight ? 'hover:drop-shadow-[0_0_6px_rgba(0,0,0,0.25)]' : 'hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'}`}
-                        >
-                            <svg width={18} height={18} viewBox="0 0 14 14" fill="none">
-                                <rect x="1" y="1" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity="0.9"/>
-                                <rect x="7.5" y="1" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity="0.9"/>
-                                <rect x="1" y="7.5" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity="0.9"/>
-                                <rect x="7.5" y="7.5" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity="0.35"/>
-                            </svg>
-                        </button>
-                        
-                        <AnimatePresence>
-                            {showModesOnboarding && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: 6, scale: 0.96, filter: "blur(4px)" }}
-                                    animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-                                    exit={{ opacity: 0, y: -2, scale: 0.98, filter: "blur(2px)", transition: { duration: 0.15, ease: "easeOut" } }}
-                                    transition={{ type: "spring", stiffness: 350, damping: 25, mass: 1 }}
-                                    className={`absolute top-[38px] right-2 w-[270px] rounded-[20px] p-4 z-[300] origin-top-right backdrop-blur-[40px] saturate-[180%] transform-gpu ${
-                                        isLight 
-                                        ? 'bg-white/70 shadow-[0_8px_30px_rgb(0,0,0,0.12),0_0_0_1px_rgba(0,0,0,0.04)]' 
-                                        : 'bg-[#18181A]/70 shadow-[0_8px_30px_rgb(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.08)]'
-                                    }`}
-                                >
-                                    {/* Triangle Pointer */}
-                                    <div className={`absolute -top-[5px] right-[14px] w-2.5 h-2.5 rotate-45 rounded-tl-[3px] ${
-                                        isLight 
-                                        ? 'bg-white/70 border-t border-l border-black/5 backdrop-blur-[40px]' 
-                                        : 'bg-[#18181A]/70 border-t border-l border-white/5 backdrop-blur-[40px]'
-                                    }`} />
-                                    
-                                    <div className="relative flex gap-3">
-                                        <div className={`w-9 h-9 flex items-center justify-center shrink-0 rounded-full ${
-                                            isLight
-                                            ? 'bg-orange-500 bg-opacity-10 text-orange-500'
-                                            : 'bg-orange-500 bg-opacity-15 text-orange-400'
-                                        }`}>
-                                            <svg width="18" height="18" viewBox="0 0 14 14" fill="none">
-                                                <rect x="1" y="1" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity="0.9"/>
-                                                <rect x="7.5" y="1" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity="0.9"/>
-                                                <rect x="1" y="7.5" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity="0.9"/>
-                                                <rect x="7.5" y="7.5" width="5.5" height="5.5" rx="1.5" fill="currentColor" opacity="0.4"/>
-                                            </svg>
-                                        </div>
-                                        <div className="flex-1 pt-[2px]">
-                                            <h3 className="text-[14px] font-semibold tracking-[-0.015em] mb-1 flex items-center gap-2">
-                                                <span className={isLight ? 'text-slate-900' : 'text-slate-100'}>{t('launcher.modesTitle')}</span>
-                                                <span className={`text-[10px] font-medium px-1.5 py-[1px] rounded-[5px] ${
-                                                    isLight
-                                                    ? 'bg-orange-50 text-orange-600 border border-orange-100/50'
-                                                    : 'bg-orange-500/10 text-orange-400'
-                                                }`}>
-                                                    {t('launcher.modesBeta')}
-                                                </span>
-                                            </h3>
-                                            <p className={`text-[12px] leading-[1.35] mb-3.5 tracking-[-0.01em] ${
-                                                isLight ? 'text-slate-500' : 'text-slate-400'
-                                            }`}>
-                                                {t('launcher.modesOnboardingDescription')}
-                                            </p>
-                                            <div className="flex justify-end gap-1.5 isolate">
-                                                <button 
-                                                    onClick={(e) => { 
-                                                        e.stopPropagation(); 
-                                                        setShowModesOnboarding(false); 
-                                                        localStorage.setItem('natively_seen_modes_onboarding_v5', 'true'); 
-                                                    }}
-                                                    className={`text-[12px] font-medium px-3.5 py-[6px] rounded-full transition-all active:scale-95 ${
-                                                        isLight
-                                                        ? 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/60'
-                                                        : 'text-slate-400 hover:text-slate-100 hover:bg-white/10'
-                                                    }`}
-                                                >
-                                                    {t('common.dismiss')}
-                                                </button>
-                                                <button
-                                                    onClick={(e) => { 
-                                                        e.stopPropagation(); 
-                                                        onOpenModes?.(); 
-                                                        setShowModesOnboarding(false); 
-                                                        localStorage.setItem('natively_seen_modes_onboarding_v5', 'true'); 
-                                                    }}
-                                                    className={`text-[12px] font-medium px-4 py-[6px] rounded-full transition-all active:scale-95 shadow-sm ${
-                                                        isLight
-                                                        ? 'bg-slate-900 text-white hover:bg-slate-800'
-                                                        : 'bg-slate-100 text-slate-900 hover:bg-white'
-                                                    }`}
-                                                >
-                                                    {t('launcher.modesTryItOut')}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-                    <button
-                        onClick={() => {
-                            onOpenSettings();
-                        }}
-                        title={t('launcher.settingsTitle')}
-                        className={`p-2 text-text-secondary hover:text-text-primary transition-all duration-300 ${isLight ? 'hover:drop-shadow-[0_0_6px_rgba(0,0,0,0.25)]' : 'hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'}`}
-                    >
-                        <Settings size={18} />
-                    </button>
                     {!isMac && <WindowControls />}
                 </div>
             </header>
 
-            <div className="relative flex-1 flex flex-col overflow-hidden">
+            <div className="relative flex-1 flex overflow-hidden">
                 {!isDetectable && (
                     <div className={`absolute inset-1 border-2 border-dashed rounded-2xl pointer-events-none z-[100] ${isLight ? 'border-black/15' : 'border-white/20'}`} />
                 )}
+
+                {/* Left Sidebar — hidden when viewing a single meeting's details */}
+                {!selectedMeeting && (
+                    <aside className={`w-[220px] shrink-0 border-r ${isLight ? 'bg-bg-secondary border-border-subtle' : 'bg-bg-secondary border-border-subtle'} flex flex-col py-5 px-3 select-none`}>
+                        <div className="px-2 mb-3">
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-text-tertiary">
+                                {t('launcher.sidebarHeading')}
+                            </span>
+                        </div>
+                        <nav className="flex flex-col gap-0.5">
+                            <button
+                                onClick={() => setSidebarView('meetings')}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-[13px] font-medium transition-colors flex items-center gap-2.5 ${
+                                    sidebarView === 'meetings'
+                                        ? 'bg-bg-item-active text-text-primary'
+                                        : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'
+                                }`}
+                            >
+                                <Briefcase size={15} />
+                                {t('launcher.sidebarMyInterviews')}
+                            </button>
+                            <button
+                                onClick={() => setSidebarView('profile')}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-[13px] font-medium transition-colors flex items-center gap-2.5 ${
+                                    sidebarView === 'profile'
+                                        ? 'bg-bg-item-active text-text-primary'
+                                        : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'
+                                }`}
+                            >
+                                <User size={15} />
+                                {t('launcher.sidebarProfile')}
+                            </button>
+                            <button
+                                onClick={() => setSidebarView('shortcuts')}
+                                className={`w-full text-left px-3 py-2 rounded-lg text-[13px] font-medium transition-colors flex items-center gap-2.5 ${
+                                    sidebarView === 'shortcuts'
+                                        ? 'bg-bg-item-active text-text-primary'
+                                        : 'text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50'
+                                }`}
+                            >
+                                <Keyboard size={15} />
+                                {t('launcher.sidebarShortcuts')}
+                            </button>
+                        </nav>
+                        <nav className="mt-auto flex flex-col gap-0.5">
+                            {currentUser.phone && (
+                                <div
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => setSidebarView('account')}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault();
+                                            setSidebarView('account');
+                                        }
+                                    }}
+                                    title={t('launcher.accountLabel')}
+                                    className={`mb-2 px-3 py-2 rounded-lg border flex items-center gap-2.5 cursor-pointer transition-colors ${
+                                        sidebarView === 'account'
+                                            ? 'bg-bg-item-active border-transparent'
+                                            : isLight
+                                                ? 'border-black/5 bg-black/[0.02] hover:bg-black/[0.05]'
+                                                : 'border-white/5 bg-white/[0.02] hover:bg-white/[0.05]'
+                                    }`}
+                                >
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isLight ? 'bg-black/5' : 'bg-white/10'}`}>
+                                        <User size={13} className="text-text-secondary" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-[10px] font-bold uppercase tracking-widest text-text-tertiary leading-tight">
+                                            {t('launcher.accountLabel')}
+                                        </div>
+                                        <div className="text-[12px] text-text-primary tracking-wider truncate">
+                                            {maskPhone(currentUser.phone)}
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        title={t('launcher.signOut')}
+                                        aria-label={t('launcher.signOut')}
+                                        onClick={(e) => { e.stopPropagation(); void signOut(); }}
+                                        className="p-1.5 rounded-md text-text-tertiary hover:text-text-primary hover:bg-bg-item-active/70 transition-colors"
+                                    >
+                                        <LogOut size={14} />
+                                    </button>
+                                </div>
+                            )}
+                            <button
+                                onClick={() => onOpenSettings()}
+                                className="w-full text-left px-3 py-2 rounded-lg text-[13px] font-medium transition-colors flex items-center gap-2.5 text-text-secondary hover:text-text-primary hover:bg-bg-item-active/50"
+                            >
+                                <Settings size={15} />
+                                {t('launcher.sidebarSettings')}
+                            </button>
+                        </nav>
+                    </aside>
+                )}
+
+                {/* Main content column */}
+                <div className="flex-1 relative flex flex-col overflow-hidden">
                 <AnimatePresence mode="wait">
                     {selectedMeeting ? (
                         <motion.div
@@ -574,6 +555,39 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                 onBack={handleBack}
                                 onOpenSettings={onOpenSettings}
                             />
+                        </motion.div>
+                    ) : sidebarView === 'profile' ? (
+                        <motion.div
+                            key="profile"
+                            className="flex-1 flex flex-col overflow-hidden"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                        >
+                            <ProfileView />
+                        </motion.div>
+                    ) : sidebarView === 'shortcuts' ? (
+                        <motion.div
+                            key="shortcuts"
+                            className="flex-1 flex flex-col overflow-hidden"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                        >
+                            <ShortcutsView />
+                        </motion.div>
+                    ) : sidebarView === 'account' ? (
+                        <motion.div
+                            key="account"
+                            className="flex-1 flex flex-col overflow-hidden"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.15 }}
+                        >
+                            <AccountView phone={currentUser.phone} onSignOut={signOut} />
                         </motion.div>
                     ) : (
                         <motion.div
@@ -896,53 +910,66 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                 <section className="px-8 py-8 min-h-full">
                                     <div className="max-w-4xl mx-auto space-y-8">
 
-                                        {/* Iterating Date Groups */}
+                                        {/* Iterating Date Groups — rendered as a 3-column card grid */}
                                         {sortedGroups.map((label) => (
                                             <section key={label}>
                                                 <h3 className="text-[13px] font-medium text-text-secondary mb-3 pl-1">{label === 'Today' ? t('launcher.groupToday') : label === 'Yesterday' ? t('launcher.groupYesterday') : label}</h3>
-                                                <div className="space-y-1">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                                     {groupedMeetings[label].map((m) => (
                                                         <motion.div
                                                             key={m.id}
                                                             layoutId={`meeting-${m.id}`}
-                                                            className="group relative flex items-center justify-between px-3 py-2 rounded-lg bg-transparent hover:bg-bg-elevated transition-colors"
+                                                            whileHover={{ y: -2 }}
+                                                            transition={{ duration: 0.15 }}
+                                                            className={`group relative flex flex-col rounded-xl border cursor-pointer transition-colors min-h-[150px] p-4 ${
+                                                                isLight
+                                                                    ? 'bg-bg-elevated border-border-subtle hover:border-border-muted shadow-[0_1px_3px_rgba(0,0,0,0.06)]'
+                                                                    : 'bg-bg-elevated border-border-subtle hover:border-border-muted'
+                                                            }`}
                                                             onClick={() => handleOpenMeeting(m)}
                                                         >
-                                                            <div className={`font-medium text-[14px] max-w-[60%] truncate ${m.title === 'Processing...' ? 'text-blue-400 italic animate-pulse' : 'text-text-primary'}`}>
-                                                                {m.title}
+                                                            {/* Header: title + duration pill */}
+                                                            <div className="flex items-start justify-between gap-2 mb-2">
+                                                                <h4 className={`font-semibold text-[14px] leading-snug line-clamp-2 flex-1 ${m.title === 'Processing...' ? 'text-blue-400 italic animate-pulse' : 'text-text-primary'}`}>
+                                                                    {getDisplayMeetingTitle(m.title, t)}
+                                                                </h4>
+                                                                {m.title !== 'Processing...' && (
+                                                                    <span className="bg-bg-input text-text-secondary text-[9px] px-1.5 py-0.5 rounded-full font-medium tracking-wide shrink-0 border border-border-subtle">
+                                                                        {formatDurationPill(m.duration)}
+                                                                    </span>
+                                                                )}
                                                             </div>
 
-                                                            {/* Time & Duration Section */}
-                                                            <div className="flex items-center gap-4">
+                                                            {/* Time row */}
+                                                            <div className="flex items-center gap-1.5 text-[11px] text-text-tertiary mb-2.5">
                                                                 {m.title === 'Processing...' ? (
-                                                                    <div className="flex items-center gap-2 transition-all duration-200 ease-out group-hover:opacity-0 group-hover:translate-x-2 delayed-hover-exit">
-                                                                        <RefreshCw size={12} className="animate-spin text-blue-500" />
-                                                                        <span className="text-xs text-blue-500 font-medium">{t('launcher.finalizing')}</span>
-                                                                    </div>
+                                                                    <>
+                                                                        <RefreshCw size={11} className="animate-spin text-blue-500" />
+                                                                        <span className="text-blue-500 font-medium">{t('launcher.finalizing')}</span>
+                                                                    </>
                                                                 ) : (
                                                                     <>
-                                                                        <span className="relative z-10 bg-bg-elevated text-text-secondary text-[9px] px-1.5 py-0.5 rounded-full font-medium min-w-[35px] text-center tracking-wide">
-                                                                            {formatDurationPill(m.duration)}
-                                                                        </span>
-
-                                                                        {/* Time Text (Should fade out on hover) */}
-                                                                        <span className="text-[13px] text-text-secondary font-medium min-w-[60px] text-right transition-all duration-200 ease-out group-hover:opacity-0 group-hover:translate-x-2 delayed-hover-exit">
-                                                                            {formatTime(m.date, t('launcher.justNow'))}
-                                                                        </span>
+                                                                        <Clock size={11} />
+                                                                        <span>{formatTime(m.date, t('launcher.justNow'), i18n.language)}</span>
                                                                     </>
                                                                 )}
                                                             </div>
 
-                                                            {/* Context Menu Trigger (Slides in on hover) */}
-                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 translate-x-4 transition-all duration-300 ease-out group-hover:opacity-100 group-hover:translate-x-0">
+                                                            {/* Summary preview */}
+                                                            <p className="text-[12px] leading-relaxed text-text-secondary line-clamp-3 flex-1">
+                                                                {m.summary || t('launcher.cardSummaryEmpty')}
+                                                            </p>
+
+                                                            {/* Context Menu Trigger */}
+                                                            <div className="absolute top-2.5 right-2.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
                                                                 <button
-                                                                    className="p-1.5 text-text-secondary hover:text-text-primary transition-colors"
+                                                                    className={`p-1 rounded transition-colors ${isLight ? 'text-text-tertiary hover:text-text-primary hover:bg-bg-input' : 'text-text-tertiary hover:text-text-primary hover:bg-white/10'}`}
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         setActiveMenuId(activeMenuId === m.id ? null : m.id);
                                                                     }}
                                                                 >
-                                                                    <MoreHorizontal size={16} />
+                                                                    <MoreHorizontal size={14} />
                                                                 </button>
                                                             </div>
 
@@ -950,11 +977,11 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                             <AnimatePresence>
                                                                 {activeMenuId === m.id && (
                                                                     <motion.div
-                                                                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                                                        initial={{ opacity: 0, scale: 0.95, y: 4 }}
                                                                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                                                                        exit={{ opacity: 0, scale: 0.95, y: 5 }}
+                                                                        exit={{ opacity: 0, scale: 0.95, y: 2 }}
                                                                         transition={{ duration: 0.1 }}
-                                                                        className={`absolute right-0 top-full mt-1 w-[90px] backdrop-blur-xl rounded-lg shadow-2xl z-50 overflow-hidden border ${isLight ? 'bg-bg-elevated border-border-muted shadow-[0_8px_24px_rgba(0,0,0,0.12)]' : 'bg-[#1E1E1E]/80 border-white/10'}`}
+                                                                        className={`absolute right-2 top-9 w-[110px] backdrop-blur-xl rounded-lg shadow-2xl z-50 overflow-hidden border ${isLight ? 'bg-bg-elevated border-border-muted shadow-[0_8px_24px_rgba(0,0,0,0.12)]' : 'bg-[#1E1E1E]/90 border-white/10'}`}
                                                                         onClick={(e) => e.stopPropagation()}
                                                                         onMouseEnter={() => setMenuEntered(true)}
                                                                         onMouseLeave={() => {
@@ -967,7 +994,6 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                                                 onClick={async () => {
                                                                                     setActiveMenuId(null);
                                                                                     analytics.trackPdfExported();
-                                                                                    // Fetch full details if needed
                                                                                     if (window.electronAPI && window.electronAPI.getMeetingDetails) {
                                                                                         try {
                                                                                             const fullMeeting = await window.electronAPI.getMeetingDetails(m.id);
@@ -994,7 +1020,6 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                                                                                     if (window.electronAPI && window.electronAPI.deleteMeeting) {
                                                                                         const success = await window.electronAPI.deleteMeeting(m.id);
                                                                                         if (success) {
-                                                                                            // Optimistic update or refetch
                                                                                             setMeetings(prev => prev.filter(meeting => meeting.id !== m.id));
                                                                                         }
                                                                                     }
@@ -1024,6 +1049,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                         </motion.div>
                     )}
                 </AnimatePresence>
+                </div>
             </div>
 
 
@@ -1065,6 +1091,7 @@ const Launcher: React.FC<LauncherProps> = ({ onStartMeeting, onOpenSettings, onO
                 }}
                 initialQuery={submittedGlobalQuery}
             />
+
         </div >
     );
 };

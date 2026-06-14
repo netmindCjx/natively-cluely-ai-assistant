@@ -114,7 +114,7 @@ interface ElectronAPI {
 
   // Meeting Lifecycle
   startMeeting: (metadata?: any) => Promise<{ success: boolean; error?: string }>
-  endMeeting: () => Promise<{ success: boolean; error?: string }>
+  endMeeting: (opts?: { discard?: boolean }) => Promise<{ success: boolean; error?: string }>
   finalizeMicSTT: () => Promise<void>
   getRecentMeetings: () => Promise<Array<{ id: string; title: string; date: string; duration: string; summary: string }>>
   getMeetingDetails: (id: string) => Promise<any>
@@ -686,7 +686,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Meeting Lifecycle
   startMeeting: (metadata?: any) => ipcRenderer.invoke("start-meeting", metadata),
-  endMeeting: () => ipcRenderer.invoke("end-meeting"),
+  endMeeting: (opts?: { discard?: boolean }) => ipcRenderer.invoke("end-meeting", opts),
   finalizeMicSTT: () => ipcRenderer.invoke("finalize-mic-stt"),
   getRecentMeetings: () => ipcRenderer.invoke("get-recent-meetings"),
   getMeetingDetails: (id: string) => ipcRenderer.invoke("get-meeting-details", id),
@@ -1176,6 +1176,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
   modesUpdateNoteSection: (id: string, updates: { title?: string; description?: string }) => ipcRenderer.invoke('modes:update-note-section', id, updates),
   modesDeleteNoteSection: (id: string) => ipcRenderer.invoke('modes:delete-note-section', id),
   modesRemoveAllNoteSections: (modeId: string) => ipcRenderer.invoke('modes:remove-all-note-sections', modeId),
+
+  // Auth (China phone SMS login) — encrypted tokens persisted via main-process safeStorage.
+  auth: {
+    getTokens: () => ipcRenderer.invoke('auth:get-tokens'),
+    setTokens: (tokens: {
+      access_token: string
+      refresh_token: string
+      user_id: string
+      phone: string
+      access_expires_at: number
+      refresh_expires_at: number
+    }) => ipcRenderer.invoke('auth:set-tokens', tokens),
+    clearTokens: () => ipcRenderer.invoke('auth:clear-tokens'),
+  },
 } as ElectronAPI)
 
 // Renderer-side console forwarding to main-process log file.

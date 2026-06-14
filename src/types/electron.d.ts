@@ -170,7 +170,7 @@ export interface ElectronAPI {
 
   // Meeting Lifecycle
   startMeeting: (metadata?: any) => Promise<{ success: boolean; error?: string }>
-  endMeeting: () => Promise<{ success: boolean; error?: string }>
+  endMeeting: (opts?: { discard?: boolean }) => Promise<{ success: boolean; error?: string }>
   finalizeMicSTT: () => Promise<void>
   getRecentMeetings: () => Promise<Array<{ id: string; title: string; date: string; duration: string; summary: string }>>
   getMeetingDetails: (id: string) => Promise<any>
@@ -359,6 +359,22 @@ export interface ElectronAPI {
 
   // Platform
   platform: NodeJS.Platform;
+
+  // Auth (China phone SMS login) — encrypted tokens persisted in main process.
+  auth: {
+    getTokens: () => Promise<StoredAuth | null>;
+    setTokens: (tokens: StoredAuth) => Promise<boolean>;
+    clearTokens: () => Promise<boolean>;
+  };
+}
+
+export interface StoredAuth {
+  access_token: string;
+  refresh_token: string;
+  user_id: string;
+  phone: string;
+  access_expires_at: number;
+  refresh_expires_at: number;
 }
 
 declare global {

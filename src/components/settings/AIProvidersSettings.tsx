@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Edit2, AlertCircle, CheckCircle, Save, ChevronDown, Check, RefreshCw, ExternalLink, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { STANDARD_CLOUD_MODELS, prettifyModelId } from '../../utils/modelUtils';
 import { validateCurl } from '../../lib/curl-validator';
 import { ProviderCard } from './ProviderCard';
@@ -23,7 +24,9 @@ interface ModelSelectProps {
     placeholder?: string;
 }
 
-const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, placeholder = "Select model" }) => {
+const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, placeholder }) => {
+    const { t } = useTranslation();
+    const resolvedPlaceholder = placeholder ?? t('aiProviders.selectModel');
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = React.useRef<HTMLDivElement>(null);
 
@@ -46,7 +49,7 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, pla
                 className="w-40 bg-bg-input border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary flex items-center justify-between hover:bg-bg-elevated transition-colors"
                 type="button"
             >
-                <span className="truncate pr-2">{selectedOption ? selectedOption.name : placeholder}</span>
+                <span className="truncate pr-2">{selectedOption ? selectedOption.name : resolvedPlaceholder}</span>
                 <ChevronDown size={14} className={`text-text-secondary transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
@@ -68,7 +71,7 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, pla
                             </button>
                         ))}
                         {options.length === 0 && (
-                            <div className="px-3 py-2 text-xs text-gray-500 italic">No models available</div>
+                            <div className="px-3 py-2 text-xs text-gray-500 italic">{t('aiProviders.noModelsAvailable')}</div>
                         )}
                     </div>
                 </div>
@@ -78,6 +81,7 @@ const ModelSelect: React.FC<ModelSelectProps> = ({ value, options, onChange, pla
 };
 
 export const AIProvidersSettings: React.FC = () => {
+    const { t } = useTranslation();
     // --- Standard Providers ---
     const [apiKey, setApiKey] = useState('');
     const [groqApiKey, setGroqApiKey] = useState('');
@@ -296,7 +300,7 @@ export const AIProvidersSettings: React.FC = () => {
     };
 
     const handleRemoveKey = async (provider: string, setter: (val: string) => void) => {
-        if (!confirm(`Are you sure you want to remove the ${provider} API key?`)) return;
+        if (!confirm(t('aiProviders.confirmRemoveKey', { provider }))) return;
         try {
             let result;
             // @ts-ignore
@@ -333,11 +337,11 @@ export const AIProvidersSettings: React.FC = () => {
                 setTimeout(() => setTestStatus(prev => ({ ...prev, [provider]: 'idle' })), 3000);
             } else {
                 setTestStatus(prev => ({ ...prev, [provider]: 'error' }));
-                setTestError(prev => ({ ...prev, [provider]: result.error || 'Connection failed' }));
+                setTestError(prev => ({ ...prev, [provider]: result.error || t('aiProviders.connectionFailed') }));
             }
         } catch (e: any) {
             setTestStatus(prev => ({ ...prev, [provider]: 'error' }));
-            setTestError(prev => ({ ...prev, [provider]: e.message || 'Connection failed' }));
+            setTestError(prev => ({ ...prev, [provider]: e.message || t('aiProviders.connectionFailed') }));
         }
     };
 
@@ -376,13 +380,13 @@ export const AIProvidersSettings: React.FC = () => {
     const handleSaveCustom = async () => {
         setCurlError(null);
         if (!customName.trim()) {
-            setCurlError("Provider Name is required.");
+            setCurlError(t('aiProviders.providerNameRequired'));
             return;
         }
 
         const validation = validateCurl(customCurl);
         if (!validation.isValid) {
-            setCurlError(validation.message || "Invalid cURL command.");
+            setCurlError(validation.message || t('aiProviders.invalidCurl'));
             return;
         }
 
@@ -411,7 +415,7 @@ export const AIProvidersSettings: React.FC = () => {
     };
 
     const handleDeleteCustom = async (id: string) => {
-        if (!confirm("Are you sure you want to delete this provider?")) return;
+        if (!confirm(t('aiProviders.confirmDeleteProvider'))) return;
         try {
             // @ts-ignore
             const result = await window.electronAPI.deleteCustomProvider(id);
@@ -430,14 +434,14 @@ export const AIProvidersSettings: React.FC = () => {
             {/* Default Model for Chat */}
             <div className="space-y-5">
                 <div>
-                    <h3 className="text-sm font-bold text-text-primary mb-1">Default Model for Chat</h3>
-                    <p className="text-xs text-text-secondary mb-2">Primary model for new chats. Other configured models act as fallbacks.</p>
+                    <h3 className="text-sm font-bold text-text-primary mb-1">{t('aiProviders.defaultModelTitle')}</h3>
+                    <p className="text-xs text-text-secondary mb-2">{t('aiProviders.defaultModelDescription')}</p>
                 </div>
 
                 <div className="bg-bg-item-surface rounded-xl p-5 border border-border-subtle flex items-center justify-between">
                     <div>
-                        <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-0">Active Model</label>
-                        <p className="text-[10px] text-text-secondary">Applies to new chats instantly.</p>
+                        <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-0">{t('aiProviders.activeModel')}</label>
+                        <p className="text-[10px] text-text-secondary">{t('aiProviders.activeModelHint')}</p>
                     </div>
                     <ModelSelect
                         value={defaultModel}
@@ -453,7 +457,7 @@ export const AIProvidersSettings: React.FC = () => {
                                 }
                             }
                             customProviders.forEach(p => opts.push({ id: p.id, name: p.name }));
-                            ollamaModels.forEach(m => opts.push({ id: `ollama-${m}`, name: `${m} (Local)` }));
+                            ollamaModels.forEach(m => opts.push({ id: `ollama-${m}`, name: `${m} (${t('aiProviders.localSuffix')})` }));
                             
                             if (defaultModel && !opts.find(o => o.id === defaultModel)) {
                                 opts.unshift({ id: defaultModel, name: prettifyModelId(defaultModel) });
@@ -471,22 +475,22 @@ export const AIProvidersSettings: React.FC = () => {
                 {/* Fast Response Mode */}
                 <div
                     className={`bg-bg-item-surface rounded-xl p-5 border border-border-subtle flex items-center justify-between ${!canUseFastMode ? 'opacity-50 grayscale' : ''}`}
-                    title={!canUseFastMode ? "Requires a Groq API Key to be configured" : ""}
+                    title={!canUseFastMode ? t('aiProviders.requiresGroqTitle') : ""}
                 >
                     <div>
                         <div className="flex items-center gap-2">
-                            <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-0">Fast Response Mode</label>
-                            <span className="bg-orange-500/10 text-orange-500 text-[9px] font-bold px-1.5 py-0.5 rounded border border-orange-500/20">NEW</span>
+                            <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-0">{t('aiProviders.fastResponseMode')}</label>
+                            <span className="bg-orange-500/10 text-orange-500 text-[9px] font-bold px-1.5 py-0.5 rounded border border-orange-500/20">{t('aiProviders.newBadge')}</span>
                         </div>
-                        <p className="text-[10px] text-text-secondary mt-0.5">Super fast responses using Groq Llama 3 for text. Multimodal requests still use your Default Model.</p>
+                        <p className="text-[10px] text-text-secondary mt-0.5">{t('aiProviders.fastResponseDescription')}</p>
                         {!canUseFastMode && (
-                            <p className="text-[10px] text-orange-500 mt-0.5 font-medium">Requires a Groq API Key to be configured.</p>
+                            <p className="text-[10px] text-orange-500 mt-0.5 font-medium">{t('aiProviders.requiresGroqShort')}</p>
                         )}
                     </div>
                     <div
                         onClick={async () => {
                             if (!canUseFastMode) {
-                                alert("Please configure a Groq API Key first to enable Fast Response Mode.");
+                                alert(t('aiProviders.configureGroqFirst'));
                                 return;
                             }
                             const newState = !fastResponseMode;
@@ -505,8 +509,8 @@ export const AIProvidersSettings: React.FC = () => {
             {/* Cloud Providers */}
             <div className="space-y-5">
                 <div>
-                    <h3 className="text-sm font-bold text-text-primary mb-1">Cloud Providers</h3>
-                    <p className="text-xs text-text-secondary mb-2">Add API keys to unlock cloud AI models.</p>
+                    <h3 className="text-sm font-bold text-text-primary mb-1">{t('aiProviders.cloudProviders')}</h3>
+                    <p className="text-xs text-text-secondary mb-2">{t('aiProviders.cloudProvidersDescription')}</p>
                 </div>
 
                 <div className="space-y-4">
@@ -598,8 +602,8 @@ export const AIProvidersSettings: React.FC = () => {
             <div className="space-y-5">
                 <div className="flex items-center justify-between mb-2">
                     <div>
-                        <h3 className="text-sm font-bold text-text-primary mb-1">Local Models (Ollama)</h3>
-                        <p className="text-xs text-text-secondary">Run open-source models locally.</p>
+                        <h3 className="text-sm font-bold text-text-primary mb-1">{t('aiProviders.localModelsTitle')}</h3>
+                        <p className="text-xs text-text-secondary">{t('aiProviders.localModelsDescription')}</p>
                     </div>
                     <button
                         onClick={async () => {
@@ -609,7 +613,7 @@ export const AIProvidersSettings: React.FC = () => {
                             setTimeout(() => setIsRefreshingOllama(false), 500);
                         }}
                         className="p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-input transition-colors"
-                        title="Refresh Ollama"
+                        title={t('aiProviders.refreshOllama')}
                         disabled={isRefreshingOllama}
                     >
                         <RefreshCw size={18} className={isRefreshingOllama ? "animate-spin" : ""} />
@@ -619,13 +623,13 @@ export const AIProvidersSettings: React.FC = () => {
                 <div className="bg-bg-item-surface rounded-xl p-5 border border-border-subtle">
                     {ollamaStatus === 'checking' && (
                         <div className="flex items-center gap-2 text-xs text-text-secondary">
-                            <span className="animate-spin">⏳</span> Checking for Ollama...
+                            <span className="animate-spin">⏳</span> {t('aiProviders.ollamaChecking')}
                         </div>
                     )}
 
                     {ollamaStatus === 'fixing' && (
                         <div className="flex items-center gap-2 text-xs text-text-secondary">
-                            <span className="animate-spin">🔧</span> Attempting to auto-fix connection...
+                            <span className="animate-spin">🔧</span> {t('aiProviders.ollamaFixing')}
                         </div>
                     )}
 
@@ -633,17 +637,17 @@ export const AIProvidersSettings: React.FC = () => {
                         <div className="flex flex-col gap-2">
                             <div className="flex items-center gap-2 text-xs text-red-400">
                                 <AlertCircle size={14} />
-                                <span>Ollama not detected</span>
+                                <span>{t('aiProviders.ollamaNotDetected')}</span>
                             </div>
                             <div className="flex items-center gap-2">
                                 <p className="text-xs text-text-secondary">
-                                    Ensure Ollama is running (`ollama serve`).
+                                    {t('aiProviders.ollamaEnsureRunning')}
                                 </p>
                                 <button
                                     onClick={handleFixOllama}
                                     className="text-[10px] bg-bg-elevated hover:bg-bg-input px-2 py-1 rounded border border-border-subtle"
                                 >
-                                    Auto-Fix Connection
+                                    {t('aiProviders.autoFixConnection')}
                                 </button>
                             </div>
                         </div>
@@ -653,14 +657,14 @@ export const AIProvidersSettings: React.FC = () => {
                         <div className="space-y-3">
                             <div className="flex items-center gap-2 text-xs text-green-400 mb-3">
                                 <CheckCircle size={14} />
-                                <span>Ollama connected</span>
+                                <span>{t('aiProviders.ollamaConnected')}</span>
                             </div>
 
                             <div className="grid grid-cols-1 gap-2">
                                 {ollamaModels.map(model => (
                                     <div key={model} className="flex items-center justify-between p-2 bg-bg-input rounded-lg border border-border-subtle">
                                         <span className="text-xs text-text-primary font-mono">{model}</span>
-                                        <span className="text-[10px] text-bg-elevated bg-text-secondary px-1.5 py-0.5 rounded-full font-bold">LOCAL</span>
+                                        <span className="text-[10px] text-bg-elevated bg-text-secondary px-1.5 py-0.5 rounded-full font-bold">{t('aiProviders.localBadge')}</span>
                                     </div>
                                 ))}
                             </div>
@@ -668,7 +672,7 @@ export const AIProvidersSettings: React.FC = () => {
                     )}
                     {ollamaStatus === 'detected' && ollamaModels.length === 0 && (
                         <div className="text-xs text-text-secondary">
-                            Ollama is running but no models found. Run `ollama pull llama3` to get started.
+                            {t('aiProviders.ollamaRunningNoModels')}
                         </div>
                     )}
                 </div>
@@ -679,39 +683,39 @@ export const AIProvidersSettings: React.FC = () => {
                 <div className="flex items-center justify-between mb-2">
                     <div>
                         <div className="flex items-center gap-2 mb-1">
-                            <h3 className="text-sm font-bold text-text-primary">Custom Providers</h3>
-                            <span className="px-1.5 py-0 rounded-full text-[7px] font-bold bg-yellow-500/10 text-yellow-500 uppercase tracking-widest border border-yellow-500/20 leading-loose mt-0.5">Experimental</span>
+                            <h3 className="text-sm font-bold text-text-primary">{t('aiProviders.customProviders')}</h3>
+                            <span className="px-1.5 py-0 rounded-full text-[7px] font-bold bg-yellow-500/10 text-yellow-500 uppercase tracking-widest border border-yellow-500/20 leading-loose mt-0.5">{t('aiProviders.experimental')}</span>
                         </div>
-                        <p className="text-xs text-text-secondary">Add your own AI endpoints via cURL.</p>
+                        <p className="text-xs text-text-secondary">{t('aiProviders.customProvidersDescription')}</p>
                     </div>
                     {!isEditingCustom && (
                         <button
                             onClick={handleNewProvider}
                             className="flex items-center gap-2 px-3 py-1.5 bg-bg-input hover:bg-bg-elevated border border-border-subtle rounded-lg text-xs font-medium text-text-primary transition-colors"
                         >
-                            <Plus size={14} /> Add Provider
+                            <Plus size={14} /> {t('aiProviders.addProvider')}
                         </button>
                     )}
                 </div>
 
                 {isEditingCustom ? (
                     <div className="bg-bg-item-surface rounded-xl p-5 border border-border-subtle animated fadeIn">
-                        <h4 className="text-sm font-bold text-text-primary mb-4">{editingProvider ? 'Edit Provider' : 'New Provider'}</h4>
+                        <h4 className="text-sm font-bold text-text-primary mb-4">{editingProvider ? t('aiProviders.editProvider') : t('aiProviders.newProvider')}</h4>
 
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-1">Provider Name</label>
+                                <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-1">{t('aiProviders.providerName')}</label>
                                 <input
                                     type="text"
                                     value={customName}
                                     onChange={(e) => setCustomName(e.target.value)}
-                                    placeholder="My Custom LLM"
+                                    placeholder={t('aiProviders.providerNamePlaceholder')}
                                     className="w-full bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-1">cURL Command</label>
+                                <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-1">{t('aiProviders.curlCommand')}</label>
                                 <div className="relative">
                                     <textarea
                                         value={customCurl}
@@ -724,48 +728,48 @@ export const AIProvidersSettings: React.FC = () => {
 
                             <div>
                                 <label className="block text-xs font-medium text-text-primary uppercase tracking-wide mb-1">
-                                    Response JSON Path <span className="text-text-tertiary normal-case font-normal">(Optional)</span>
+                                    {t('aiProviders.responseJsonPath')} <span className="text-text-tertiary normal-case font-normal">{t('aiProviders.optional')}</span>
                                 </label>
                                 <input
                                     type="text"
                                     value={customResponsePath}
                                     onChange={(e) => setCustomResponsePath(e.target.value)}
-                                    placeholder="e.g. choices[0].message.content"
+                                    placeholder={t('aiProviders.responsePathPlaceholder')}
                                     className="w-full bg-bg-input border border-border-subtle rounded-lg px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:border-accent-primary transition-colors font-mono"
                                 />
                                 <p className="text-[10px] text-text-secondary mt-1">
-                                    Dot notation path to the answer text in the JSON response. If empty, the full JSON is returned.
+                                    {t('aiProviders.responsePathHint')}
                                 </p>
                             </div>
 
                             <div className="bg-bg-elevated/30 rounded-lg overflow-hidden border border-border-subtle mt-4">
                                 <div className="px-4 py-3 bg-bg-elevated/50 border-b border-border-subtle flex items-center justify-between">
                                     <h5 className="block text-xs font-medium text-text-primary uppercase tracking-wide">
-                                        Configuration Guide
+                                        {t('aiProviders.configGuide')}
                                     </h5>
                                 </div>
 
                                 <div className="p-4 space-y-4">
                                     <div>
-                                        <p className="text-xs text-text-secondary mb-2 font-medium">Available Variables</p>
+                                        <p className="text-xs text-text-secondary mb-2 font-medium">{t('aiProviders.availableVariables')}</p>
                                         <div className="grid grid-cols-1 gap-2">
                                             <div className="flex items-center gap-2 text-xs">
                                                 <code className="bg-bg-input px-1.5 py-0.5 rounded text-text-primary font-mono border border-border-subtle">{"{{TEXT}}"}</code>
-                                                <span className="text-text-tertiary">Combined System + Context + Message (Recommended)</span>
+                                                <span className="text-text-tertiary">{t('aiProviders.varTextDescription')}</span>
                                             </div>
                                             <div className="flex items-center gap-2 text-xs">
                                                 <code className="bg-bg-input px-1.5 py-0.5 rounded text-text-primary font-mono border border-border-subtle">{"{{IMAGE_BASE64}}"}</code>
-                                                <span className="text-text-tertiary">Screenshot data (if available)</span>
+                                                <span className="text-text-tertiary">{t('aiProviders.varImageDescription')}</span>
                                             </div>
                                         </div>
                                     </div>
 
                                     <div>
-                                        <p className="text-xs text-text-secondary mb-2 font-medium">Examples</p>
+                                        <p className="text-xs text-text-secondary mb-2 font-medium">{t('aiProviders.examples')}</p>
                                         <div className="space-y-3">
                                             {/* Ollama Example */}
                                             <div>
-                                                <div className="text-[10px] uppercase tracking-wider text-text-tertiary mb-1.5">Local (Ollama)</div>
+                                                <div className="text-[10px] uppercase tracking-wider text-text-tertiary mb-1.5">{t('aiProviders.exampleLocalOllama')}</div>
                                                 <div className="bg-bg-input p-2.5 rounded-lg border border-border-subtle overflow-x-auto group relative">
                                                     <code className="font-mono text-[10px] text-text-primary whitespace-pre block">
                                                         curl http://localhost:11434/api/generate -d '{"{"}"model": "llama3", "prompt": "{`{{TEXT}}`}"{"}"}'
@@ -775,7 +779,7 @@ export const AIProvidersSettings: React.FC = () => {
 
                                             {/* OpenAI Example */}
                                             <div>
-                                                <div className="text-[10px] uppercase tracking-wider text-text-tertiary mb-1.5">OpenAI Compatible</div>
+                                                <div className="text-[10px] uppercase tracking-wider text-text-tertiary mb-1.5">{t('aiProviders.exampleOpenAI')}</div>
                                                 <div className="bg-bg-input p-2.5 rounded-lg border border-border-subtle overflow-x-auto">
                                                     <code className="font-mono text-[10px] text-text-primary whitespace-pre block">
                                                         {`curl https://api.openai.com/v1/chat/completions \\
@@ -809,13 +813,13 @@ export const AIProvidersSettings: React.FC = () => {
                                     onClick={() => setIsEditingCustom(false)}
                                     className="px-4 py-2 rounded-lg text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-bg-input transition-colors"
                                 >
-                                    Cancel
+                                    {t('common.cancel')}
                                 </button>
                                 <button
                                     onClick={handleSaveCustom}
                                     className="px-4 py-2 rounded-lg text-xs font-medium bg-accent-primary text-white hover:bg-accent-secondary transition-colors flex items-center gap-2"
                                 >
-                                    <Save size={14} /> Save Provider
+                                    <Save size={14} /> {t('aiProviders.saveProvider')}
                                 </button>
                             </div>
                         </div>
@@ -824,7 +828,7 @@ export const AIProvidersSettings: React.FC = () => {
                     <div className="space-y-3">
                         {customProviders.length === 0 ? (
                             <div className="text-center py-8 bg-bg-item-surface rounded-xl border border-border-subtle border-dashed">
-                                <p className="text-xs text-text-tertiary">No custom providers added yet.</p>
+                                <p className="text-xs text-text-tertiary">{t('aiProviders.noCustomProviders')}</p>
                             </div>
                         ) : (
                             customProviders.map((provider) => (
@@ -840,7 +844,7 @@ export const AIProvidersSettings: React.FC = () => {
                                             </p>
                                             {provider.responsePath && (
                                                 <p className="text-[9px] text-text-tertiary font-mono opacity-40 mt-0.5">
-                                                    path: {provider.responsePath}
+                                                    {t('aiProviders.pathLabel')}: {provider.responsePath}
                                                 </p>
                                             )}
                                         </div>
@@ -849,14 +853,14 @@ export const AIProvidersSettings: React.FC = () => {
                                         <button
                                             onClick={() => handleEditProvider(provider)}
                                             className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors"
-                                            title="Edit"
+                                            title={t('aiProviders.edit')}
                                         >
                                             <Edit2 size={14} />
                                         </button>
                                         <button
                                             onClick={() => handleDeleteCustom(provider.id)}
                                             className="p-1.5 rounded-lg text-text-secondary hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                                            title="Delete"
+                                            title={t('common.delete')}
                                         >
                                             <Trash2 size={14} />
                                         </button>

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { MessageSquare, Link, Camera, Zap, Heart, User } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useShortcuts } from '../hooks/useShortcuts';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
 
 const SettingsPopup = () => {
+    const { t } = useTranslation();
     const { shortcuts } = useShortcuts();
     const isLightTheme = useResolvedTheme() === 'light';
     const [isUndetectable, setIsUndetectable] = useState(false);
@@ -198,7 +200,7 @@ const SettingsPopup = () => {
                             stroke={isUndetectable ? "none" : "currentColor"}
                             eyeColor={isUndetectable ? (isLightTheme ? "white" : "black") : (isLightTheme ? "#334155" : "white")}
                         />
-                        <span className={`text-[12px] font-medium transition-colors ${isUndetectable ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>{isUndetectable ? 'Undetectable' : 'Detectable'}</span>
+                        <span className={`text-[12px] font-medium transition-colors ${isUndetectable ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>{isUndetectable ? t('settingsPopup.undetectable') : t('settingsPopup.detectable')}</span>
                     </div>
                     <button
                         onClick={() => {
@@ -217,13 +219,13 @@ const SettingsPopup = () => {
 
 
                 {/* Groq (Fast Text) Toggle — requires Groq key */}
-                <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group ${!hasStoredKey.groq ? 'opacity-50 grayscale cursor-not-allowed' : `${itemHoverClass} cursor-default`}`} title={!hasStoredKey.groq ? "Requires Groq API key" : ""}>
+                <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group ${!hasStoredKey.groq ? 'opacity-50 grayscale cursor-not-allowed' : `${itemHoverClass} cursor-default`}`} title={!hasStoredKey.groq ? t('settingsPopup.requiresGroqKey') : ""}>
                     <div className="flex items-center gap-3">
                         <Zap
                             className={`w-4 h-4 transition-colors ${useGroqFastText ? 'text-orange-500' : iconInactiveClass}`}
                             fill={useGroqFastText ? "currentColor" : "none"}
                         />
-                        <span className={`text-[12px] font-medium transition-colors ${useGroqFastText ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>Fast Response</span>
+                        <span className={`text-[12px] font-medium transition-colors ${useGroqFastText ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>{t('settingsPopup.fastResponse')}</span>
                     </div>
                     <button
                         onClick={() => {
@@ -244,7 +246,7 @@ const SettingsPopup = () => {
                             className={`w-3.5 h-3.5 transition-colors ${showTranscript ? 'text-emerald-400' : iconInactiveClass}`}
                             fill={showTranscript ? "currentColor" : "none"}
                         />
-                        <span className={`text-[12px] font-medium transition-colors ${showTranscript ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>Transcript</span>
+                        <span className={`text-[12px] font-medium transition-colors ${showTranscript ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>{t('settingsPopup.transcript')}</span>
                     </div>
                     <button
                         onClick={() => {
@@ -278,7 +280,7 @@ const SettingsPopup = () => {
                             <circle cx="6" cy="18" r="3" />
                             <path d="M18 9a9 9 0 0 1-9 9" />
                         </svg>
-                        <span className={`text-[12px] font-medium transition-colors ${actionButtonMode === 'brainstorm' ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>Interview Mode</span>
+                        <span className={`text-[12px] font-medium transition-colors ${actionButtonMode === 'brainstorm' ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>{t('settingsPopup.interviewMode')}</span>
                     </div>
                     <button
                         onClick={async () => {
@@ -303,7 +305,7 @@ const SettingsPopup = () => {
                                 className={`w-3.5 h-3.5 transition-colors ${profileMode ? 'text-accent-primary' : iconInactiveClass}`}
                                 fill={profileMode ? "currentColor" : "none"}
                             />
-                            <span className={`text-[12px] font-medium transition-colors ${profileMode ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>Profile Mode</span>
+                            <span className={`text-[12px] font-medium transition-colors ${profileMode ? (isLightTheme ? 'text-slate-950' : 'text-white') : labelInactiveClass}`}>{t('settingsPopup.profileMode')}</span>
                         </div>
                         <button
                             onClick={async () => {
@@ -327,7 +329,7 @@ const SettingsPopup = () => {
                 <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group interaction-base interaction-press ${itemHoverClass}`}>
                     <div className="flex items-center gap-3">
                         <MessageSquare className={`w-3.5 h-3.5 transition-colors ${iconInactiveClass}`} />
-                        <span className={`text-[12px] transition-colors ${labelInactiveClass}`}>Show/Hide</span>
+                        <span className={`text-[12px] transition-colors ${labelInactiveClass}`}>{t('settingsPopup.showHide')}</span>
                     </div>
                     <div className="flex gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                         {/* Dynamic Keys for Toggle Visibility */}
@@ -343,7 +345,7 @@ const SettingsPopup = () => {
                 <div className={`flex items-center justify-between px-3 py-2 rounded-lg transition-colors duration-200 group interaction-base interaction-press ${itemHoverClass}`}>
                     <div className="flex items-center gap-3">
                         <Camera className={`w-3.5 h-3.5 transition-colors ${iconInactiveClass}`} />
-                        <span className={`text-[12px] transition-colors ${labelInactiveClass}`}>Screenshot</span>
+                        <span className={`text-[12px] transition-colors ${labelInactiveClass}`}>{t('settingsPopup.screenshot')}</span>
                     </div>
                     <div className="flex gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                         {/* Dynamic Keys for Take Screenshot */}
@@ -365,7 +367,7 @@ const SettingsPopup = () => {
                 >
                     <div className="flex items-center gap-3">
                         <Heart className="w-3.5 h-3.5 text-pink-400 group-hover:fill-pink-400 transition-all duration-300" />
-                        <span className={`text-[12px] transition-colors ${isLightTheme ? 'text-slate-700 group-hover:text-pink-700' : 'text-slate-400 group-hover:text-pink-100'}`}>Donate</span>
+                        <span className={`text-[12px] transition-colors ${isLightTheme ? 'text-slate-700 group-hover:text-pink-700' : 'text-slate-400 group-hover:text-pink-100'}`}>{t('settingsPopup.donate')}</span>
                     </div>
                     <div className="opacity-60 group-hover:opacity-100 transition-opacity">
                         <Link className={`w-3 h-3 group-hover:text-pink-400 ${isLightTheme ? 'text-slate-600' : 'text-slate-500'}`} />

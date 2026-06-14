@@ -1734,9 +1734,9 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 
-  safeHandle("end-meeting", async () => {
+  safeHandle("end-meeting", async (_event, opts?: { discard?: boolean }) => {
     try {
-      await appState.endMeeting();
+      await appState.endMeeting({ discard: !!opts?.discard });
       return { success: true };
     } catch (error: any) {
       console.error("Error ending meeting:", error);

@@ -26,6 +26,10 @@ import {
 import { analytics } from "./lib/analytics/analytics.service"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 import ModesSettings from "./components/settings/ModesSettings"
+import LoginPanel from "./components/auth/LoginPanel"
+import { useAuth } from "./hooks/useAuth"
+import { AuthProvider } from "./contexts/AuthContext"
+import EndMeetingConfirmDialog from "./components/meeting/EndMeetingConfirmDialog"
 
 const queryClient = new QueryClient()
 
@@ -39,6 +43,9 @@ const App: React.FC = () => {
 
   // Default to launcher if not specified (dev mode safety)
   const isDefault = !isSettingsWindow && !isOverlayWindow && !isModelSelectorWindow && !isCropperWindow;
+
+  // Auth state — drives the launcher window's login gate. Other windows ignore this.
+  const { state: authState, completeLogin, logout } = useAuth();
 
   if (isCropperWindow) {
     const Cropper = React.lazy(() => import('./components/Cropper'));
@@ -88,6 +95,8 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState('general');
   const [isModesOpen, setIsModesOpen] = useState(false);
+  // Launcher view request — used by ad-triggered profile callbacks to flip the launcher sidebar into "profile" mode
+  const [launcherViewRequest, setLauncherViewRequest] = useState<{ view: 'meetings' | 'profile'; nonce: number }>({ view: 'meetings', nonce: 0 });
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [isPremiumActive, setIsPremiumActive] = useState(false);
   const [hasLoadedLicense, setHasLoadedLicense] = useState(false);
@@ -111,6 +120,7 @@ const App: React.FC = () => {
   const [appStartTime] = useState<number>(Date.now());
   const [lastMeetingEndTime, setLastMeetingEndTime] = useState<number | null>(null);
   const [isProcessingMeeting, setIsProcessingMeeting] = useState<boolean>(false);
+  const [showEndMeetingConfirm, setShowEndMeetingConfirm] = useState<boolean>(false);
   
   // Ollama Auto-Pull State
   const [ollamaPullStatus, setOllamaPullStatus] = useState<'idle' | 'downloading' | 'complete' | 'failed'>('idle');
@@ -311,29 +321,46 @@ const App: React.FC = () => {
   };
 
   const handleEndMeeting = async () => {
-    console.log("[App.tsx] handleEndMeeting triggered");
+    if (showEndMeetingConfirm || isProcessingMeeting) return;
+    console.log("[App.tsx] handleEndMeeting triggered; opening confirm dialog");
+    setShowEndMeetingConfirm(true);
+  };
+
+  const finalizeEndMeeting = async (discard: boolean) => {
+    if (isProcessingMeeting) return;
+    console.log(`[App.tsx] finalizeEndMeeting discard=${discard}`);
     analytics.trackMeetingEnded();
     setIsProcessingMeeting(true);
     try {
-      await window.electronAPI.endMeeting();
+      const result = await window.electronAPI.endMeeting({ discard });
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to end meeting');
+      }
       console.log("[App.tsx] endMeeting IPC completed");
-      
+
+      // Only prompt for the profile toaster when the user actually saved a meeting.
       const startStr = localStorage.getItem('natively_last_meeting_start');
       if (startStr) {
-        const duration = Date.now() - parseInt(startStr, 10);
-        const threshold = import.meta.env.DEV ? 10000 : 180000;
-        if (duration >= threshold) {
-          localStorage.setItem('natively_show_profile_toaster', 'true');
+        if (!discard) {
+          const duration = Date.now() - parseInt(startStr, 10);
+          const threshold = import.meta.env.DEV ? 10000 : 180000;
+          if (duration >= threshold) {
+            localStorage.setItem('natively_show_profile_toaster', 'true');
+          }
         }
         localStorage.removeItem('natively_last_meeting_start');
       }
 
-      // Switch back to Native Launcher Mode
-      // (Ad delay tracking moved to onMeetingsUpdated listener so ads wait for note generation to finish)
       await window.electronAPI.setWindowMode('launcher');
     } catch (err) {
       console.error("Failed to end meeting:", err);
+      setIsProcessingMeeting(false);
       window.electronAPI.setWindowMode('launcher');
+    } finally {
+      if (discard) {
+        setIsProcessingMeeting(false);
+      }
+      setShowEndMeetingConfirm(false);
     }
   };
 
@@ -385,6 +412,15 @@ const App: React.FC = () => {
                   onEndMeeting={handleEndMeeting}
                   overlayOpacity={overlayOpacity}
                 />
+                <EndMeetingConfirmDialog
+                  isOpen={showEndMeetingConfirm}
+                  busy={isProcessingMeeting}
+                  onCancel={() => {
+                    if (!isProcessingMeeting) setShowEndMeetingConfirm(false);
+                  }}
+                  onSave={() => finalizeEndMeeting(false)}
+                  onDiscard={() => finalizeEndMeeting(true)}
+                />
               </div>
               <ToastViewport />
             </ToastProvider>
@@ -400,13 +436,24 @@ const App: React.FC = () => {
     <ErrorBoundary context="Launcher">
     <div className="h-full min-h-0 w-full relative bg-[#000000]">
       <AnimatePresence>
-        {showStartup ? (
+        {showStartup || authState.status === 'loading' ? (
           <motion.div
             key="startup"
             initial={{ opacity: 1 }}
             exit={{ opacity: 0, scale: 1.1, pointerEvents: "none", transition: { duration: 0.6, ease: "easeInOut" } }}
           >
             <StartupSequence onComplete={() => setShowStartup(false)} />
+          </motion.div>
+        ) : authState.status === 'unauthenticated' ? (
+          <motion.div
+            key="login"
+            className="h-full w-full"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <LoginPanel onLogin={completeLogin} />
           </motion.div>
         ) : (
           <motion.div
@@ -422,6 +469,7 @@ const App: React.FC = () => {
           >
             <QueryClientProvider client={queryClient}>
               <ToastProvider>
+                <AuthProvider value={{ auth: authState.status === 'authenticated' ? authState.auth : { access_token: '', refresh_token: '', user_id: '', phone: '', access_expires_at: 0, refresh_expires_at: 0 }, logout }}>
                 <div id="launcher-container" className="h-full w-full relative">
                   <Launcher
                     onStartMeeting={handleStartMeeting}
@@ -434,6 +482,7 @@ const App: React.FC = () => {
                     ollamaPullStatus={ollamaPullStatus}
                     ollamaPullPercent={ollamaPullPercent}
                     ollamaPullMessage={ollamaPullMessage}
+                    viewRequest={launcherViewRequest}
                   />
                 </div>
                 <SettingsOverlay
@@ -467,6 +516,7 @@ const App: React.FC = () => {
                   )}
                 </AnimatePresence>
                 <ToastViewport />
+                </AuthProvider>
               </ToastProvider>
             </QueryClientProvider>
           </motion.div>
@@ -531,16 +581,14 @@ const App: React.FC = () => {
             isOpen={activeAd === 'profile'}
             onDismiss={dismissAd}
             onSetupProfile={() => {
-              setSettingsInitialTab('profile');
-              setIsSettingsOpen(true);
+              setLauncherViewRequest(prev => ({ view: 'profile', nonce: prev.nonce + 1 }));
             }}
           />
           <JDAwarenessToaster
             isOpen={activeAd === 'jd'}
             onDismiss={dismissAd}
             onSetupJD={() => {
-              setSettingsInitialTab('profile');
-              setIsSettingsOpen(true);
+              setLauncherViewRequest(prev => ({ view: 'profile', nonce: prev.nonce + 1 }));
             }}
           />
           <PremiumPromoToaster
@@ -578,10 +626,9 @@ const App: React.FC = () => {
             .then(d => setPlanDetails(d ?? { isPremium: true }))
             .catch(() => setPlanDetails({ isPremium: true }));
           setShowPremiumModal(false);
-          // After activation, open settings to Profile Intelligence
+          // After activation, jump to the launcher's Profile view
           setTimeout(() => {
-            setSettingsInitialTab('profile');
-            setIsSettingsOpen(true);
+            setLauncherViewRequest(prev => ({ view: 'profile', nonce: prev.nonce + 1 }));
           }, 300);
         }}
         onDeactivated={() => { setIsPremiumActive(false); setPlanDetails({ isPremium: false }); }}

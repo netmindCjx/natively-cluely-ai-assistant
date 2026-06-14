@@ -146,6 +146,7 @@ console.error = (...args: any[]) => {
 };
 
 import { initializeIpcHandlers } from "./ipcHandlers"
+import { initializeAuthIpcHandlers } from "./authIpcHandlers"
 import { WindowHelper } from "./WindowHelper"
 import { SettingsWindowHelper } from "./SettingsWindowHelper"
 import { ModelSelectorWindowHelper } from "./ModelSelectorWindowHelper"
@@ -1570,8 +1571,9 @@ export class AppState {
     }, 0); // Defer to next event loop tick — ensures IPC response reaches renderer before audio init
   }
 
-  public async endMeeting(): Promise<void> {
-    console.log('[Main] Ending Meeting...');
+  public async endMeeting(opts: { discard?: boolean } = {}): Promise<void> {
+    const discard = !!opts.discard;
+    console.log(`[Main] Ending Meeting... discard=${discard}`);
     this.isMeetingActive = false; // Block new data immediately
     this.broadcastMeetingState();
 
@@ -1586,12 +1588,12 @@ export class AppState {
     this.microphoneCapture?.stop();
     this.googleSTT_User?.stop();
 
-    // Save session state and reset context — MeetingPersistence.stopMeeting() is
-    // already fire-and-forget internally (processAndSaveMeeting runs in background).
+    // Save or discard session state and reset context. MeetingPersistence.stopMeeting()
+    // is already fire-and-forget internally when saving.
     // Capture the meetingId NOW so the background IIFE uses a deterministic ID
     // rather than getRecentMeetings(1) which could return a different meeting if the
     // user starts a new session before background processing finishes.
-    const meetingId = await this.intelligenceManager.stopMeeting();
+    const meetingId = await this.intelligenceManager.stopMeeting({ discard });
 
     // Revert to Default Model — synchronous, no blocking I/O
     try {
@@ -2659,6 +2661,7 @@ async function initializeApp() {
 
   // Initialize IPC handlers before window creation
   initializeIpcHandlers(appState)
+  initializeAuthIpcHandlers()
 
   // Apply the full disguise payload (names, dock icon, AUMID) early
   appState.applyInitialDisguise();

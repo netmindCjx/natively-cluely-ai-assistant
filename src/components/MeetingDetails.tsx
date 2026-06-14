@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
-import { ArrowLeft, Search, Mail, Link, ChevronDown, Play, ArrowUp, Copy, Check, MoreHorizontal, Settings, ArrowRight } from 'lucide-react';
+import { ArrowLeft, Search, Mail, Link, ChevronDown, Play, ArrowUp, Copy, Check, MoreHorizontal, Settings, ArrowRight, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import MeetingChatOverlay from './MeetingChatOverlay';
 import EditableTextBlock from './EditableTextBlock';
@@ -10,6 +10,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { formatLocalizedDate, getDisplayMeetingTitle } from '../utils/localizedDisplay';
 
 const formatTime = (ms: number) => {
     const date = new Date(ms);
@@ -92,8 +93,8 @@ interface MeetingDetailsProps {
     onOpenSettings: () => void;
 }
 
-const MeetingDetails: React.FC<MeetingDetailsProps> = ({ meeting: initialMeeting }) => {
-    const { t } = useTranslation();
+const MeetingDetails: React.FC<MeetingDetailsProps> = ({ meeting: initialMeeting, onBack }) => {
+    const { t, i18n } = useTranslation();
     const isLight = useResolvedTheme() === 'light';
     // We need local state for the meeting object to reflect optimistic updates
     const [meeting, setMeeting] = useState<Meeting>(initialMeeting);
@@ -125,8 +126,8 @@ const MeetingDetails: React.FC<MeetingDetailsProps> = ({ meeting: initialMeeting
 
         if (activeTab === 'summary' && meeting.detailedSummary) {
             textToCopy = `
-Meeting: ${meeting.title}
-Date: ${new Date(meeting.date).toLocaleDateString()}
+Meeting: ${getDisplayMeetingTitle(meeting.title, t)}
+Date: ${formatLocalizedDate(meeting.date, i18n.language, { year: 'numeric', month: 'short', day: 'numeric' })}
 
 OVERVIEW:
 ${meeting.detailedSummary.overview || ''}
@@ -223,17 +224,26 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                     transition={{ delay: 0.1, duration: 0.3 }}
                     className="max-w-4xl mx-auto px-8 py-8 pb-32" // Added pb-32 for floating footer clearance
                 >
+                    {/* Close Button */}
+                    <button
+                        onClick={onBack}
+                        className={`inline-flex items-center justify-center mb-4 -ml-2 p-1.5 rounded-md text-text-secondary hover:text-text-primary transition-colors ${isLight ? 'hover:bg-black/[0.04]' : 'hover:bg-white/[0.06]'}`}
+                        aria-label={t('meetingDetails.close', 'Close')}
+                    >
+                        <X size={18} />
+                    </button>
+
                     {/* Meta Info & Actions Row */}
                     <div className="flex items-start justify-between mb-6">
                         <div className="w-full pr-4">
                             {/* Date formatting could be improved to use meeting.date if it's an ISO string */}
                             <div className="text-xs text-text-tertiary font-medium mb-1">
-                                {new Date(meeting.date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                                {formatLocalizedDate(meeting.date, i18n.language, { weekday: 'long', month: 'short', day: 'numeric' })}
                             </div>
 
                             {/* Editable Title */}
                             <EditableTextBlock
-                                initialValue={meeting.title}
+                                initialValue={getDisplayMeetingTitle(meeting.title, t)}
                                 onSave={handleTitleSave}
                                 tagName="h1"
                                 className="text-3xl font-bold text-text-primary tracking-tight -ml-2 px-2 py-1 rounded-md transition-colors"
@@ -436,7 +446,7 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                                         console.log('Filtered Transcript:', filteredTranscript);
 
                                         if (filteredTranscript.length === 0) {
-                                            return <p className="text-text-tertiary">No transcript available.</p>;
+                                            return <p className="text-text-tertiary">{t('meetingDetails.noTranscript')}</p>;
                                         }
 
                                         return filteredTranscript.map((entry, i) => (
@@ -540,7 +550,7 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                                         )}
                                     </div>
                                 ))}
-                                {!meeting.usage?.length && <p className="text-text-tertiary">No usage history.</p>}
+                                {!meeting.usage?.length && <p className="text-text-tertiary">{t('meetingDetails.noUsageHistory')}</p>}
                             </motion.section>
                         )}
 
@@ -552,7 +562,7 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                                         return (
                                             <div className="text-text-tertiary text-sm">
                                                 <p>{t('meetingDetails.noUsage')}</p>
-                                                <p className="mt-2 text-xs">Token tracking was added recently — meetings created before the update will not have analysis data.</p>
+                                                <p className="mt-2 text-xs">{t('meetingDetails.analysis.legacyNote')}</p>
                                             </div>
                                         );
                                     }
@@ -567,34 +577,34 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                                         <div className="space-y-8">
                                             {/* Top-level totals */}
                                             <section>
-                                                <h2 className="text-lg font-semibold text-text-primary mb-4">This Meeting</h2>
+                                                <h2 className="text-lg font-semibold text-text-primary mb-4">{t('meetingDetails.analysis.thisMeeting')}</h2>
                                                 <div className="grid grid-cols-2 gap-3">
                                                     <div className={`rounded-xl border p-4 ${isLight ? 'bg-white border-black/[0.06]' : 'bg-[#1A1A1C] border-white/[0.08]'}`}>
-                                                        <div className="text-xs text-text-tertiary uppercase tracking-wider mb-1">Total cost</div>
+                                                        <div className="text-xs text-text-tertiary uppercase tracking-wider mb-1">{t('meetingDetails.analysis.totalCost')}</div>
                                                         <div className="text-2xl font-semibold text-text-primary">{fmtCost(tu.totals.totalCost)}</div>
                                                         <div className="text-xs text-text-tertiary mt-1">LLM {fmtCost(tu.totals.llmCost)} · STT {fmtCost(tu.totals.sttCost)}</div>
                                                     </div>
                                                     <div className={`rounded-xl border p-4 ${isLight ? 'bg-white border-black/[0.06]' : 'bg-[#1A1A1C] border-white/[0.08]'}`}>
-                                                        <div className="text-xs text-text-tertiary uppercase tracking-wider mb-1">LLM calls</div>
+                                                        <div className="text-xs text-text-tertiary uppercase tracking-wider mb-1">{t('meetingDetails.analysis.llmCalls')}</div>
                                                         <div className="text-2xl font-semibold text-text-primary">{fmtNum(tu.totals.llmCallCount)}</div>
-                                                        <div className="text-xs text-text-tertiary mt-1">requests issued</div>
+                                                        <div className="text-xs text-text-tertiary mt-1">{t('meetingDetails.analysis.requestsIssued')}</div>
                                                     </div>
                                                     <div className={`rounded-xl border p-4 ${isLight ? 'bg-white border-black/[0.06]' : 'bg-[#1A1A1C] border-white/[0.08]'}`}>
-                                                        <div className="text-xs text-text-tertiary uppercase tracking-wider mb-1">Input tokens</div>
+                                                        <div className="text-xs text-text-tertiary uppercase tracking-wider mb-1">{t('meetingDetails.analysis.inputTokens')}</div>
                                                         <div className="text-2xl font-semibold text-text-primary">{fmtNum(tu.totals.inputTokens)}</div>
                                                         {tu.totals.cachedInputTokens > 0 && (
-                                                            <div className="text-xs text-text-tertiary mt-1">{fmtNum(tu.totals.cachedInputTokens)} cached</div>
+                                                            <div className="text-xs text-text-tertiary mt-1">{t('meetingDetails.analysis.cachedSuffix', { count: tu.totals.cachedInputTokens, formatted: fmtNum(tu.totals.cachedInputTokens) })}</div>
                                                         )}
                                                     </div>
                                                     <div className={`rounded-xl border p-4 ${isLight ? 'bg-white border-black/[0.06]' : 'bg-[#1A1A1C] border-white/[0.08]'}`}>
-                                                        <div className="text-xs text-text-tertiary uppercase tracking-wider mb-1">Output tokens</div>
+                                                        <div className="text-xs text-text-tertiary uppercase tracking-wider mb-1">{t('meetingDetails.analysis.outputTokens')}</div>
                                                         <div className="text-2xl font-semibold text-text-primary">{fmtNum(tu.totals.outputTokens)}</div>
-                                                        <div className="text-xs text-text-tertiary mt-1">generated</div>
+                                                        <div className="text-xs text-text-tertiary mt-1">{t('meetingDetails.analysis.generated')}</div>
                                                     </div>
                                                 </div>
                                                 {tu.totals.sttSeconds > 0 && (
                                                     <div className={`mt-3 rounded-xl border p-4 ${isLight ? 'bg-white border-black/[0.06]' : 'bg-[#1A1A1C] border-white/[0.08]'}`}>
-                                                        <div className="text-xs text-text-tertiary uppercase tracking-wider mb-1">STT audio</div>
+                                                        <div className="text-xs text-text-tertiary uppercase tracking-wider mb-1">{t('meetingDetails.analysis.sttAudio')}</div>
                                                         <div className="text-2xl font-semibold text-text-primary">{fmtSeconds(tu.totals.sttSeconds)}</div>
                                                     </div>
                                                 )}
@@ -603,16 +613,16 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                                             {/* By Model */}
                                             {tu.byModel?.length > 0 && (
                                                 <section>
-                                                    <h2 className="text-lg font-semibold text-text-primary mb-4">By Model</h2>
+                                                    <h2 className="text-lg font-semibold text-text-primary mb-4">{t('meetingDetails.analysis.byModel')}</h2>
                                                     <div className={`rounded-xl border overflow-hidden ${isLight ? 'border-black/[0.06]' : 'border-white/[0.08]'}`}>
                                                         <table className="w-full text-sm">
                                                             <thead className={isLight ? 'bg-[#F5F5F7] text-text-secondary' : 'bg-[#1A1A1C] text-text-tertiary'}>
                                                                 <tr>
-                                                                    <th className="text-left px-4 py-2 font-medium text-xs uppercase tracking-wider">Provider / Model</th>
-                                                                    <th className="text-right px-4 py-2 font-medium text-xs uppercase tracking-wider">Calls</th>
-                                                                    <th className="text-right px-4 py-2 font-medium text-xs uppercase tracking-wider">Input</th>
-                                                                    <th className="text-right px-4 py-2 font-medium text-xs uppercase tracking-wider">Output</th>
-                                                                    <th className="text-right px-4 py-2 font-medium text-xs uppercase tracking-wider">Cost</th>
+                                                                    <th className="text-left px-4 py-2 font-medium text-xs uppercase tracking-wider">{t('meetingDetails.analysis.providerModel')}</th>
+                                                                    <th className="text-right px-4 py-2 font-medium text-xs uppercase tracking-wider">{t('meetingDetails.analysis.calls')}</th>
+                                                                    <th className="text-right px-4 py-2 font-medium text-xs uppercase tracking-wider">{t('meetingDetails.analysis.input')}</th>
+                                                                    <th className="text-right px-4 py-2 font-medium text-xs uppercase tracking-wider">{t('meetingDetails.analysis.output')}</th>
+                                                                    <th className="text-right px-4 py-2 font-medium text-xs uppercase tracking-wider">{t('meetingDetails.analysis.cost')}</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody>
@@ -635,7 +645,7 @@ ${meeting.detailedSummary.keyPoints?.map(item => `- ${item}`).join('\n') || 'Non
                                             )}
 
                                             <p className="text-xs text-text-tertiary">
-                                                Costs are estimates based on published provider pricing; actual billing may vary. Models without a known price contribute $0 to the cost.
+                                                {t('meetingDetails.analysis.disclaimer')}
                                             </p>
                                         </div>
                                     );

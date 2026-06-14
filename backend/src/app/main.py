@@ -1,0 +1,39 @@
+import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from .config import get_settings
+from .routers import auth, health
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings = get_settings()
+    logging.basicConfig(level=settings.log_level)
+    logger = logging.getLogger(__name__)
+    logger.info(
+        "starting backend env=%s aliyun_enabled=%s supabase_enabled=%s captcha_enabled=%s",
+        settings.env,
+        settings.aliyun_enabled,
+        settings.supabase_enabled,
+        settings.captcha_enabled,
+    )
+    if settings.jwt_secret.startswith("dev-only"):
+        logger.warning("JWT_SECRET is the default dev secret — change it before production!")
+    yield
+
+
+app = FastAPI(title="Natively Backend", version="0.1.0", lifespan=lifespan)
+# CORS — the Electron renderer can show up as http://localhost:5173 (Vite dev),
+# file:// (packaged), or app:// custom protocol. Allow all in dev; tighten in prod.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+app.include_router(health.router)
+app.include_router(auth.router)

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Search, Sparkles, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useResolvedTheme } from '../hooks/useResolvedTheme';
+import { formatLocalizedDate, getDisplayMeetingTitle } from '../utils/localizedDisplay';
 
 // ============================================
 // Types
@@ -51,7 +52,12 @@ function fuzzyMatch(text: string, query: string): boolean {
     return false;
 }
 
-function searchMeetings(meetings: Meeting[], query: string): SearchResult[] {
+function searchMeetings(
+    meetings: Meeting[],
+    query: string,
+    language: string,
+    t: ReturnType<typeof useTranslation>['t']
+): SearchResult[] {
     if (!query.trim()) return [];
 
     const results: SearchResult[] = [];
@@ -69,8 +75,8 @@ function searchMeetings(meetings: Meeting[], query: string): SearchResult[] {
             results.push({
                 id: meeting.id,
                 type: 'meeting',
-                title: meeting.title,
-                subtitle: new Date(meeting.date).toLocaleDateString('en-US', {
+                title: getDisplayMeetingTitle(meeting.title, t),
+                subtitle: formatLocalizedDate(meeting.date, language, {
                     month: 'short',
                     day: 'numeric'
                 }),
@@ -95,7 +101,7 @@ const TopSearchPill: React.FC<TopSearchPillProps> = ({
     onOpenMeeting,
     onExpansionChange
 }) => {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const isLight = useResolvedTheme() === 'light';
     const [state, setState] = useState<PillState>('idle');
     const [query, setQuery] = useState('');
@@ -112,8 +118,8 @@ const TopSearchPill: React.FC<TopSearchPillProps> = ({
     // Compute results
     const sessionResults = useMemo(() => {
         if (state !== 'results' || !query.trim()) return [];
-        return searchMeetings(meetings, query);
-    }, [meetings, query, state]);
+        return searchMeetings(meetings, query, i18n.language, t);
+    }, [meetings, query, state, i18n.language, t]);
 
     // Total selectable items: 2 (Explore section) + sessions
     const totalItems = 2 + sessionResults.length;

@@ -22,8 +22,9 @@ export class MeetingPersistence {
      * Stops the meeting immediately, snapshots data, and triggers background processing.
      * Returns immediately so UI can switch.
      */
-    public async stopMeeting(): Promise<string | null> {
-        console.log('[MeetingPersistence] Stopping meeting and queueing save...');
+    public async stopMeeting(opts: { discard?: boolean } = {}): Promise<string | null> {
+        const discard = !!opts.discard;
+        console.log(`[MeetingPersistence] Stopping meeting... discard=${discard}`);
 
         // 0. Force-save any pending interim transcript
         this.session.flushInterimTranscript();
@@ -50,6 +51,12 @@ export class MeetingPersistence {
 
         // 2. Reset state immediately so new meeting can start or UI is clean
         this.session.reset();
+
+        if (discard) {
+            console.log('[MeetingPersistence] Meeting discarded before persistence.');
+            TokenUsageTracker.reset();
+            return null;
+        }
 
         const meetingId = crypto.randomUUID();
         this.processAndSaveMeeting(snapshot, meetingId, metadataSnapshot).catch(err => {
