@@ -4,6 +4,10 @@ import * as path from 'path';
 import { app } from 'electron';
 import * as fs from 'fs';
 import * as sqliteVec from 'sqlite-vec';
+import { CloudClient } from '../services/CloudClient';
+
+// Onboarding demo meeting id. Must be a UUID because the cloud meetings table id is uuid.
+const DEMO_MEETING_ID = '00000000-0000-0000-0000-0000000000de';
 
 // Interfaces for our data objects
 export interface Meeting {
@@ -56,6 +60,48 @@ export class DatabaseManager {
         }
         return DatabaseManager.instance;
     }
+
+    // Meetings + transcripts + ai_interactions + custom notes are stored in the cloud
+    // (per-account). The local SQLite below still backs RAG (chunks/embeddings), the
+    // Knowledge subsystem, and device-local app_state.
+    private get cloud() {
+        return CloudClient.getInstance();
+    }
+
+    private static durationString(durationMs: number): string {
+        const ms = durationMs || 0;
+        const minutes = Math.floor(ms / 60000);
+        const seconds = Math.floor((ms % 60000) / 1000);
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    private static rowToMeetingSummary(row: any): Meeting {
+        const s = row.summary_json || {};
+        return {
+            id: row.id, title: row.title, date: row.created_at,
+            duration: DatabaseManager.durationString(row.duration_ms),
+            summary: s.legacySummary || '', detailedSummary: s.detailedSummary,
+            calendarEventId: row.calendar_event_id, source: row.source,
+            transcript: [], usage: [],
+        };
+    }
+
+    private static rowToMeetingDetails(data: any): Meeting {
+        const m = data.meeting; const s = m.summary_json || {};
+        const transcript = (data.transcripts || []).map((r: any) => ({ speaker: r.speaker, text: r.content, timestamp: r.timestamp_ms }));
+        const usage = (data.ai_interactions || []).map((r: any) => ({
+            type: r.type, timestamp: r.timestamp, question: r.user_query, answer: r.ai_response,
+            items: Array.isArray(r.metadata_json) ? r.metadata_json : undefined,
+        }));
+        return {
+            id: m.id, title: m.title, date: m.created_at,
+            duration: DatabaseManager.durationString(m.duration_ms),
+            summary: s.legacySummary || '', detailedSummary: s.detailedSummary,
+            calendarEventId: m.calendar_event_id, source: m.source,
+            transcript, usage, tokenUsage: m.token_usage_json ?? null,
+        };
+    }
+
 
     private init() {
         try {
@@ -601,26 +647,16 @@ export class DatabaseManager {
     // Profile Custom Notes
     // ============================================
 
-    public getCustomNotes(): string {
-        if (!this.db) return '';
-        try {
-            const row = this.db.prepare('SELECT content FROM profile_custom_notes WHERE id = 1').get() as { content: string } | undefined;
-            return row?.content ?? '';
-        } catch (e) {
-            console.error('[DatabaseManager] getCustomNotes failed:', e);
-            return '';
-        }
+
+    public async getCustomNotes(): Promise<string> {
+        try { const res = await this.cloud.getCustomNotes(); return res?.content ?? ''; }
+        catch (e) { console.error('[DatabaseManager] getCustomNotes failed:', e); return ''; }
     }
 
-    public saveCustomNotes(content: string): void {
-        if (!this.db) return;
-        try {
-            this.db.prepare(
-                'INSERT INTO profile_custom_notes (id, content, updated_at) VALUES (1, ?, datetime(\'now\')) ON CONFLICT(id) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at'
-            ).run(content);
-        } catch (e) {
-            console.error('[DatabaseManager] saveCustomNotes failed:', e);
-        }
+
+    public async saveCustomNotes(content: string): Promise<void> {
+        try { await this.cloud.saveCustomNotes(content); }
+        catch (e) { console.error('[DatabaseManager] saveCustomNotes failed:', e); }
     }
 
     // ============================================
@@ -973,353 +1009,87 @@ export class DatabaseManager {
         return this.resolvedExtPath;
     }
 
-    public saveMeeting(meeting: Meeting, startTimeMs: number, durationMs: number) {
-        if (!this.db) {
-            console.error('[DatabaseManager] DB not initialized');
-            return;
-        }
 
-        const insertMeeting = this.db.prepare(`
-            INSERT OR REPLACE INTO meetings (id, title, start_time, duration_ms, summary_json, created_at, calendar_event_id, source, is_processed, token_usage_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        const insertTranscript = this.db.prepare(`
-            INSERT INTO transcripts (meeting_id, speaker, content, timestamp_ms)
-            VALUES (?, ?, ?, ?)
-        `);
-
-        const insertInteraction = this.db.prepare(`
-            INSERT INTO ai_interactions (meeting_id, type, timestamp, user_query, ai_response, metadata_json)
-            VALUES (?, ?, ?, ?, ?, ?)
-        `);
-
-        const summaryJson = JSON.stringify({
-            legacySummary: meeting.summary,
-            detailedSummary: meeting.detailedSummary
+    public async saveMeeting(meeting: Meeting, startTimeMs: number, durationMs: number): Promise<void> {
+        const summaryJson = { legacySummary: meeting.summary, detailedSummary: meeting.detailedSummary };
+        const transcripts = (meeting.transcript || []).map(s => ({ speaker: s.speaker, content: s.text, timestamp_ms: s.timestamp }));
+        const aiInteractions = (meeting.usage || []).map(u => {
+            let metadata: any = null;
+            if (u.items) metadata = u.items;
+            else if (u.type === 'followup_questions' && Array.isArray(u.answer)) metadata = u.answer;
+            const answerText = Array.isArray(u.answer) ? null : (u.answer || null);
+            return { type: u.type, timestamp: u.timestamp, user_query: u.question || null, ai_response: answerText, metadata_json: metadata };
         });
-
-        const runTransaction = this.db.transaction(() => {
-            // 1. Insert Meeting
-            const tokenUsageJson = meeting.tokenUsage ? JSON.stringify(meeting.tokenUsage) : null;
-            insertMeeting.run(
-                meeting.id,
-                meeting.title,
-                startTimeMs,
-                durationMs,
-                summaryJson,
-                meeting.date, // Using the ISO string as created_at for sorting simply
-                meeting.calendarEventId || null,
-                meeting.source || 'manual',
-                meeting.isProcessed ? 1 : 0,
-                tokenUsageJson
-            );
-
-            // 2. Insert Transcript
-            if (meeting.transcript) {
-                for (const segment of meeting.transcript) {
-                    insertTranscript.run(
-                        meeting.id,
-                        segment.speaker,
-                        segment.text,
-                        segment.timestamp
-                    );
-                }
-            }
-
-            // 3. Insert Interactions
-            if (meeting.usage) {
-                for (const usage of meeting.usage) {
-                    let metadata = null;
-                    if (usage.items) {
-                        metadata = JSON.stringify(usage.items);
-                    } else if (usage.type === 'followup_questions' && usage.answer) {
-                        // Sometimes answer is the array for questions, or we store it in metadata
-                        // In intelligence manager we pushed: { type: 'followup_questions', answer: fullQuestions }
-                        // Let's store that 'answer' (array) in metadata for this type
-                        if (Array.isArray(usage.answer)) {
-                            metadata = JSON.stringify(usage.answer);
-                        }
-                    }
-
-                    // Normalization
-                    const answerText = Array.isArray(usage.answer) ? null : usage.answer || null;
-                    const queryText = usage.question || null;
-
-                    insertInteraction.run(
-                        meeting.id,
-                        usage.type,
-                        usage.timestamp,
-                        queryText,
-                        answerText,
-                        metadata
-                    );
-                }
-            }
-        });
-
-        try {
-            runTransaction();
-            console.log(`[DatabaseManager] Successfully saved meeting ${meeting.id}`);
-        } catch (err) {
-            console.error(`[DatabaseManager] Failed to save meeting ${meeting.id}`, err);
-            throw err;
-        }
-    }
-
-    public updateMeetingTitle(id: string, title: string): boolean {
-        if (!this.db) return false;
-        try {
-            const stmt = this.db.prepare('UPDATE meetings SET title = ? WHERE id = ?');
-            const info = stmt.run(title, id);
-            return info.changes > 0;
-        } catch (error) {
-            console.error(`[DatabaseManager] Failed to update title for meeting ${id}:`, error);
-            return false;
-        }
-    }
-
-    public updateMeetingSummary(id: string, updates: { overview?: string, actionItems?: string[], keyPoints?: string[], actionItemsTitle?: string, keyPointsTitle?: string }): boolean {
-        if (!this.db) return false;
-
-        try {
-            // 1. Get current summary_json
-            const row = this.db.prepare('SELECT summary_json FROM meetings WHERE id = ?').get(id) as any;
-            if (!row) return false;
-
-            const existingData = JSON.parse(row.summary_json || '{}');
-            const currentDetailed = existingData.detailedSummary || {};
-
-            // 2. Merge updates
-            const newDetailed = {
-                ...currentDetailed,
-                ...updates
-            };
-
-            // Should likely filter out undefined updates if spread doesn't handle them how we want, 
-            // but spread over undefined is fine. We want to overwrite if provided.
-            // If updates.overview is empty string, it overwrites. 
-            // If updates.overview is undefined, we use ...updates trick:
-            // Actually spread only includes own enumerable properties. If I pass { overview: "new" }, it works.
-
-            // However, we need to be careful not to wipe legacySummary if it exists
-            const newData = {
-                ...existingData,
-                detailedSummary: newDetailed
-            };
-
-            const jsonStr = JSON.stringify(newData);
-
-            // 3. Write back
-            const stmt = this.db.prepare('UPDATE meetings SET summary_json = ? WHERE id = ?');
-            const info = stmt.run(jsonStr, id);
-            return info.changes > 0;
-
-        } catch (error) {
-            console.error(`[DatabaseManager] Failed to update summary for meeting ${id}:`, error);
-            return false;
-        }
-    }
-
-    public getRecentMeetings(limit: number = 50): Meeting[] {
-        if (!this.db) return [];
-
-        const stmt = this.db.prepare(`
-            SELECT * FROM meetings 
-            ORDER BY created_at DESC 
-            LIMIT ?
-        `);
-
-        const rows = stmt.all(limit) as any[];
-
-        return rows.map(row => {
-            const summaryData = JSON.parse(row.summary_json || '{}');
-
-            // Format duration string if needed, but we typically store ms
-            // Let's recreate the 'duration' string "MM:SS" from duration_ms
-            const minutes = Math.floor(row.duration_ms / 60000);
-            const seconds = Math.floor((row.duration_ms % 60000) / 1000);
-            const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-
-            return {
-                id: row.id,
-                title: row.title,
-                date: row.created_at, // Use the stored ISO string
-                duration: durationStr,
-                summary: summaryData.legacySummary || '',
-                detailedSummary: summaryData.detailedSummary,
-                calendarEventId: row.calendar_event_id,
-                source: row.source as any,
-                // We don't load full transcript/usage for list view to keep it light
-                transcript: [] as any[],
-                usage: [] as any[]
-            };
-        });
-    }
-
-    public getMeetingDetails(id: string): Meeting | null {
-        if (!this.db) return null;
-
-        const meetingStmt = this.db.prepare('SELECT * FROM meetings WHERE id = ?');
-        const meetingRow = meetingStmt.get(id) as any;
-
-        if (!meetingRow) return null;
-
-        // Get Transcript
-        const transcriptStmt = this.db.prepare('SELECT * FROM transcripts WHERE meeting_id = ? ORDER BY timestamp_ms ASC');
-        const transcriptRows = transcriptStmt.all(id) as any[];
-
-        // Get Usage
-        const usageStmt = this.db.prepare('SELECT * FROM ai_interactions WHERE meeting_id = ? ORDER BY timestamp ASC');
-        const usageRows = usageStmt.all(id) as any[];
-
-        // Reconstruct
-        const summaryData = JSON.parse(meetingRow.summary_json || '{}');
-        const minutes = Math.floor(meetingRow.duration_ms / 60000);
-        const seconds = Math.floor((meetingRow.duration_ms % 60000) / 1000);
-        const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-
-        const transcript = transcriptRows.map(row => ({
-            speaker: row.speaker,
-            text: row.content,
-            timestamp: row.timestamp_ms
-        }));
-
-        const usage = usageRows.map(row => {
-            let items: string[] | undefined;
-            let answer = row.ai_response;
-
-            if (row.metadata_json) {
-                try {
-                    const parsed = JSON.parse(row.metadata_json);
-                    if (Array.isArray(parsed)) {
-                        items = parsed;
-                        // Special case: for 'followup_questions', earlier we treated 'answer' as the array in memory
-                        // UI expects appropriate field. If type is 'followup_questions', usually answer is null and items has the questions.
-                    }
-                } catch (e) { console.warn('[DatabaseManager] Failed to parse metadata_json for interaction:', row?.id, e); }
-            }
-
-            return {
-                type: row.type,
-                timestamp: row.timestamp,
-                question: row.user_query,
-                answer: answer,
-                items: items
-            };
-        });
-
-        let tokenUsage: any = null;
-        if (meetingRow.token_usage_json) {
-            try { tokenUsage = JSON.parse(meetingRow.token_usage_json); } catch (e) {
-                console.warn('[DatabaseManager] Failed to parse token_usage_json for meeting:', meetingRow.id, e);
-            }
-        }
-
-        return {
-            id: meetingRow.id,
-            title: meetingRow.title,
-            date: meetingRow.created_at,
-            duration: durationStr,
-            summary: summaryData.legacySummary || '',
-            detailedSummary: summaryData.detailedSummary,
-            calendarEventId: meetingRow.calendar_event_id,
-            source: meetingRow.source,
-            transcript: transcript,
-            usage: usage,
-            tokenUsage: tokenUsage
+        const meetingRow = {
+            id: meeting.id, title: meeting.title, start_time: startTimeMs, duration_ms: durationMs,
+            summary_json: summaryJson, token_usage_json: meeting.tokenUsage ?? null,
+            calendar_event_id: meeting.calendarEventId || null, source: meeting.source || 'manual',
+            is_processed: meeting.isProcessed ?? true, created_at: meeting.date,
         };
+        await this.cloud.saveMeeting({ meeting: meetingRow, transcripts, ai_interactions: aiInteractions });
+        console.log(`[DatabaseManager] Saved meeting ${meeting.id} to cloud`);
     }
 
-    public deleteMeeting(id: string): boolean {
-        if (!this.db) return false;
 
+    public async updateMeetingTitle(id: string, title: string): Promise<boolean> {
+        const res = await this.cloud.updateMeetingTitle(id, title);
+        return !!res?.updated;
+    }
+
+
+    public async updateMeetingSummary(id: string, updates: { overview?: string, actionItems?: string[], keyPoints?: string[], actionItemsTitle?: string, keyPointsTitle?: string }): Promise<boolean> {
+        const res = await this.cloud.updateMeetingSummary(id, updates);
+        return !!res?.updated;
+    }
+
+
+    public async getRecentMeetings(limit: number = 50): Promise<Meeting[]> {
+        const rows = await this.cloud.getRecentMeetings(limit);
+        return (rows || []).map(r => DatabaseManager.rowToMeetingSummary(r));
+    }
+
+
+    public async getMeetingDetails(id: string): Promise<Meeting | null> {
+        const data = await this.cloud.getMeetingDetails(id);
+        if (!data || !data.meeting) return null;
+        return DatabaseManager.rowToMeetingDetails(data);
+    }
+
+
+    public async deleteMeeting(id: string): Promise<boolean> {
+        const res = await this.cloud.deleteMeeting(id);
+        return !!res?.deleted;
+    }
+
+
+    public async getUnprocessedMeetings(): Promise<Meeting[]> {
+        const rows = await this.cloud.getUnprocessedMeetings();
+        return (rows || []).map(r => ({ ...DatabaseManager.rowToMeetingSummary(r), isProcessed: false }));
+    }
+
+
+    public async clearAllData(): Promise<boolean> {
         try {
-            const stmt = this.db.prepare('DELETE FROM meetings WHERE id = ?');
-            const info = stmt.run(id);
-            console.log(`[DatabaseManager] Deleted meeting ${id}. Changes: ${info.changes}`);
-            return info.changes > 0;
-        } catch (error) {
-            console.error(`[DatabaseManager] Failed to delete meeting ${id}:`, error);
-            return false;
-        }
-    }
-
-    public getUnprocessedMeetings(): Meeting[] {
-        if (!this.db) return [];
-
-        // is_processed = 0 means false
-        const stmt = this.db.prepare(`
-            SELECT * FROM meetings 
-            WHERE is_processed = 0 
-            ORDER BY created_at DESC
-        `);
-
-        const rows = stmt.all() as any[];
-
-        return rows.map(row => {
-            // Reconstruct minimal meeting object for processing
-            // We mainly need ID to fetch transcripts later
-            const summaryData = JSON.parse(row.summary_json || '{}');
-            const minutes = Math.floor(row.duration_ms / 60000);
-            const seconds = Math.floor((row.duration_ms % 60000) / 1000);
-            const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-
-            return {
-                id: row.id,
-                title: row.title,
-                date: row.created_at,
-                duration: durationStr,
-                summary: summaryData.legacySummary || '',
-                detailedSummary: summaryData.detailedSummary,
-                calendarEventId: row.calendar_event_id,
-                source: row.source,
-                isProcessed: false,
-                transcript: [] as any[], // Fetched separately via getMeetingDetails or manually if needed
-                usage: [] as any[]
-            };
-        });
-    }
-
-    public clearAllData(): boolean {
-        if (!this.db) return false;
-
-        try {
-            // Clear all tables atomically (order matters due to foreign keys,
-            // but SQLite handles cascades). Using a transaction ensures we never
-            // end up in a half-cleared state if one statement fails.
-            this.db.transaction(() => {
-                this.db!.exec('DELETE FROM embedding_queue');
-                this.db!.exec('DELETE FROM chunk_summaries');
-                this.db!.exec('DELETE FROM chunks');
-                this.db!.exec('DELETE FROM ai_interactions');
-                this.db!.exec('DELETE FROM transcripts');
-                this.db!.exec('DELETE FROM meetings');
-            })();
-
-            console.log('[DatabaseManager] All data cleared from database.');
+            const rows = await this.cloud.getRecentMeetings(1000);
+            await Promise.all((rows || []).map(r => this.cloud.deleteMeeting(r.id)));
             return true;
-        } catch (error) {
-            console.error('[DatabaseManager] Failed to clear all data:', error);
-            return false;
-        }
+        } catch (e) { console.error('[DatabaseManager] clearAllData failed:', e); return false; }
     }
 
-    public seedDemoMeeting() {
-        if (!this.db) return;
-
-        // Check if demo meeting already exists
-        const existing = this.db.prepare('SELECT id FROM meetings WHERE id = ?').get('demo-meeting');
-        if (existing) {
-            console.log('[DatabaseManager] Demo meeting already exists, skipping seed.');
+    public async seedDemoMeeting(): Promise<void> {
+        // Check if demo meeting already exists in the cloud
+        try {
+            const existing = await this.cloud.getMeetingDetails(DEMO_MEETING_ID);
+            if (existing && existing.meeting) {
+                console.log('[DatabaseManager] Demo meeting already exists, skipping seed.');
+                return;
+            }
+        } catch (e) {
+            console.error('[DatabaseManager] seedDemoMeeting existence check failed:', e);
             return;
         }
 
-        // Do NOT flush all meetings. Preserving user data is critical.
-        // If we really need to clean up old demo data, we should delete only that ID.
-        // this.deleteMeeting('demo-meeting'); // Optional safety if we wanted to force update
-
-        const demoId = 'demo-meeting';
+        const demoId = DEMO_MEETING_ID;
 
         // Set date to today 9:30 AM
         const today = new Date();
@@ -1485,7 +1255,7 @@ natively.contact@gmail.com`;
             isProcessed: true
         };
 
-        this.saveMeeting(demoMeeting, today.getTime(), durationMs);
+        await this.saveMeeting(demoMeeting, today.getTime(), durationMs);
         console.log('[DatabaseManager] Seeded demo meeting.');
     }
 }

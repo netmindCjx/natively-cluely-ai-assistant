@@ -195,6 +195,8 @@ class SupabaseDataRepo:
     ) -> None:
         def _save():
             row = {**meeting, "user_id": user_id}
+            if row.get("created_at") is None:
+                row.pop("created_at", None)  # let the column default (now()) apply
             self._client.table("meetings").upsert(row, on_conflict="id").execute()
             # Replace children for idempotency (re-save / reprocess shouldn't duplicate).
             mid = meeting["id"]

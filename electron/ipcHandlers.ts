@@ -34,8 +34,8 @@ export function initializeIpcHandlers(appState: AppState): void {
   // and reference files stop being injected into LLM calls.
   const clearActiveModeOnLicenseLoss = (): void => {
     try {
-      const { DatabaseManager } = require('./db/DatabaseManager');
-      DatabaseManager.getInstance().setActiveMode(null);
+      const { ModesManager } = require('./services/ModesManager');
+      ModesManager.getInstance().setActiveMode(null);
       BrowserWindow.getAllWindows().forEach(win => {
         if (!win.isDestroyed()) win.webContents.send('modes-active-cleared');
       });
@@ -1777,7 +1777,7 @@ export function initializeIpcHandlers(appState: AppState): void {
   });
 
   safeHandle("flush-database", async () => {
-    const result = DatabaseManager.getInstance().clearAllData();
+    const result = await DatabaseManager.getInstance().clearAllData();
     return { success: result };
   });
 
@@ -2575,7 +2575,7 @@ export function initializeIpcHandlers(appState: AppState): void {
 
   safeHandle("profile:get-notes", async () => {
     try {
-      const content = DatabaseManager.getInstance().getCustomNotes();
+      const content = await DatabaseManager.getInstance().getCustomNotes();
       return { success: true, content };
     } catch (error: any) {
       return { success: false, content: '', error: error.message };
@@ -2662,6 +2662,7 @@ export function initializeIpcHandlers(appState: AppState): void {
     try {
       const { ModesManager } = require('./services/ModesManager');
       const mgr = ModesManager.getInstance();
+      if (!mgr.isHydrated()) await mgr.hydrate();
       const modes = mgr.getModes();
       // Attach reference file counts
       return modes.map((m: any) => ({

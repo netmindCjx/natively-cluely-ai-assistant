@@ -357,9 +357,9 @@ export class RAGManager {
             // delete existing RAG data first to avoid duplicates
             this.deleteMeetingData(meetingId);
 
-            // Fetch meeting details from DB
+            // Fetch meeting details from the cloud
             const { DatabaseManager } = require('../db/DatabaseManager');
-            const meeting = DatabaseManager.getInstance().getMeetingDetails(meetingId);
+            const meeting = await DatabaseManager.getInstance().getMeetingDetails(meetingId);
 
             if (!meeting) {
                 console.error(`[RAGManager] Meeting ${meetingId} not found for reprocessing`);
@@ -401,11 +401,11 @@ export class RAGManager {
      * Checks if demo meeting exists but has no chunks, then processes it
      */
     async ensureDemoMeetingProcessed(): Promise<void> {
-        const demoId = 'demo-meeting'; // Corrected ID to match DatabaseManager
+        const demoId = '00000000-0000-0000-0000-0000000000de'; // matches DatabaseManager DEMO_MEETING_ID
 
-        // Check if demo meeting exists in DB
+        // Check if demo meeting exists in the cloud
         const { DatabaseManager } = require('../db/DatabaseManager');
-        const meeting = DatabaseManager.getInstance().getMeetingDetails(demoId);
+        const meeting = await DatabaseManager.getInstance().getMeetingDetails(demoId);
 
         if (!meeting) {
             // console.log('[RAGManager] Demo meeting not found in DB, skipping RAG processing');

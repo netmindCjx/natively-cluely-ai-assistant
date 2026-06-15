@@ -27,6 +27,9 @@ class MeetingRow(BaseModel):
     is_processed: bool = True
     embedding_provider: str | None = None
     embedding_dimensions: int | None = None
+    # The client sends the meeting's wall-clock time as created_at so list ordering and the
+    # displayed date reflect when the meeting happened, not when it was saved.
+    created_at: str | None = None
 
 
 class TranscriptRow(BaseModel):

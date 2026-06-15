@@ -7,15 +7,27 @@ import { LLMHelper } from './LLMHelper';
 import { DatabaseManager, Meeting } from './db/DatabaseManager';
 import { GROQ_TITLE_PROMPT, GROQ_SUMMARY_JSON_PROMPT } from './llm';
 import { TokenUsageTracker, mergeTokenUsageSnapshots } from './services/TokenUsageTracker';
+import { MeetingOutbox } from './services/MeetingOutbox';
 const crypto = require('crypto');
 
 export class MeetingPersistence {
     private session: SessionTracker;
     private llmHelper: LLMHelper;
+    private outbox = new MeetingOutbox();
 
     constructor(session: SessionTracker, llmHelper: LLMHelper) {
         this.session = session;
         this.llmHelper = llmHelper;
+    }
+
+    /** Save a meeting to the cloud; on failure, queue it to the local outbox for retry on next launch. */
+    private async saveMeetingResilient(meeting: Meeting, startTimeMs: number, durationMs: number): Promise<void> {
+        try {
+            await DatabaseManager.getInstance().saveMeeting(meeting, startTimeMs, durationMs);
+        } catch (err) {
+            console.error(`[MeetingPersistence] Cloud save failed for ${meeting.id}, queuing to outbox:`, err);
+            this.outbox.enqueue(meeting, startTimeMs, durationMs);
+        }
     }
 
     /**
@@ -81,7 +93,7 @@ export class MeetingPersistence {
         };
 
         try {
-            DatabaseManager.getInstance().saveMeeting(placeholder, snapshot.startTime, durationMs);
+            await this.saveMeetingResilient(placeholder, snapshot.startTime, durationMs);
             // Notify Frontend
             const wins = require('electron').BrowserWindow.getAllWindows();
             wins.forEach((w: any) => w.webContents.send('meetings-updated'));
@@ -283,7 +295,7 @@ Return ONLY valid JSON (no markdown code blocks):
                 isProcessed: true
             };
 
-            DatabaseManager.getInstance().saveMeeting(meetingData, data.startTime, data.durationMs);
+            await this.saveMeetingResilient(meetingData, data.startTime, data.durationMs);
 
             // Reset the global tracker now that this meeting's tokens are persisted.
             TokenUsageTracker.reset();
@@ -305,7 +317,13 @@ Return ONLY valid JSON (no markdown code blocks):
     public async recoverUnprocessedMeetings(): Promise<void> {
         console.log('[MeetingPersistence] Checking for unprocessed meetings...');
         const db = DatabaseManager.getInstance();
-        const unprocessed = db.getUnprocessedMeetings();
+
+        // First, flush any meetings that failed to reach the cloud (offline at stop).
+        await this.outbox.flush(entry =>
+            db.saveMeeting(entry.meeting, entry.startTimeMs, entry.durationMs),
+        );
+
+        const unprocessed = await db.getUnprocessedMeetings();
 
         if (unprocessed.length === 0) {
             console.log('[MeetingPersistence] No unprocessed meetings found.');
@@ -316,7 +334,7 @@ Return ONLY valid JSON (no markdown code blocks):
 
         for (const m of unprocessed) {
             try {
-                const details = db.getMeetingDetails(m.id);
+                const details = await db.getMeetingDetails(m.id);
                 if (!details) continue;
 
                 console.log(`[MeetingPersistence] Recovering meeting ${m.id}...`);

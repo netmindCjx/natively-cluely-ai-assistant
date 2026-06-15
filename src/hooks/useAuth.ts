@@ -79,6 +79,15 @@ export function useAuth() {
     void restore()
   }, [restore])
 
+  // The main process (CloudClient) broadcasts this when a token refresh fails on a data
+  // request — drop straight to the login panel.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onAuthSessionExpired?.(() => {
+      setState({ status: "unauthenticated" })
+    })
+    return () => unsubscribe?.()
+  }, [])
+
   return { state, completeLogin, logout, restore }
 }
 

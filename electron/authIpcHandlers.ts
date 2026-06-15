@@ -16,6 +16,13 @@ export function initializeAuthIpcHandlers(): void {
   ipcMain.removeHandler(CHANNELS.SET)
   ipcMain.handle(CHANNELS.SET, (_evt, auth: StoredAuth) => {
     storage.write(auth)
+    // Freshly logged in — warm the per-account caches that have synchronous public APIs.
+    try {
+      const { ModesManager } = require("./services/ModesManager")
+      ModesManager.getInstance().hydrate().catch(() => {})
+    } catch {
+      /* ModesManager may not be loaded in non-launcher windows */
+    }
     return true
   })
 

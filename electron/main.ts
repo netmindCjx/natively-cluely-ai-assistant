@@ -448,13 +448,10 @@ export class AppState {
         llmHelper.setGroqFastTextMode(true);
         console.log('[AppState] Fast mode restored from settings');
       }
-      // Restore custom notes for non-premium path
-      try {
-        const savedNotes = DatabaseManager.getInstance().getCustomNotes();
-        if (savedNotes) {
-          llmHelper.setCustomNotes(savedNotes);
-        }
-      } catch (_) {}
+      // Restore custom notes for non-premium path (cloud — fire-and-forget)
+      DatabaseManager.getInstance().getCustomNotes()
+        .then(savedNotes => { if (savedNotes) llmHelper.setCustomNotes(savedNotes); })
+        .catch(() => {});
     }
 
     // Initialize RAGManager (requires database to be ready)
@@ -626,13 +623,16 @@ export class AppState {
           console.log('[AppState] Knowledge mode restored from settings');
         }
 
-        // Restore custom notes so orchestrator has them from first request
-        const savedNotes = DatabaseManager.getInstance().getCustomNotes();
-        if (savedNotes) {
-          this.knowledgeOrchestrator.setCustomNotes(savedNotes);
-          llmHelper.setCustomNotes(savedNotes);
-          console.log('[AppState] Custom notes restored');
-        }
+        // Restore custom notes so orchestrator has them from first request (cloud — fire-and-forget)
+        DatabaseManager.getInstance().getCustomNotes()
+          .then(savedNotes => {
+            if (savedNotes) {
+              this.knowledgeOrchestrator.setCustomNotes(savedNotes);
+              llmHelper.setCustomNotes(savedNotes);
+              console.log('[AppState] Custom notes restored');
+            }
+          })
+          .catch(() => {});
 
         console.log('[AppState] KnowledgeOrchestrator initialized');
       }
@@ -1656,7 +1656,7 @@ export class AppState {
     try {
       // Use the explicit meetingId passed from endMeeting() — deterministic, never
       // picks up a concurrently started meeting the way getRecentMeetings(1) could.
-      const meeting = DatabaseManager.getInstance().getMeetingDetails(meetingId);
+      const meeting = await DatabaseManager.getInstance().getMeetingDetails(meetingId);
       if (!meeting || !meeting.transcript || meeting.transcript.length === 0) return;
 
       // Convert transcript to RAG format
@@ -2804,6 +2804,18 @@ async function initializeApp() {
   appState.getIntelligenceManager().recoverUnprocessedMeetings().catch(err => {
     console.error('[Main] Failed to recover unprocessed meetings:', err);
   });
+
+  // Warm the per-account modes cache for returning users (tokens already on disk).
+  try {
+    const { CloudClient } = require('./services/CloudClient');
+    const { ModesManager } = require('./services/ModesManager');
+    if (CloudClient.getInstance().isAuthenticated()) {
+      ModesManager.getInstance().hydrate().catch((err: any) =>
+        console.error('[Main] Failed to hydrate modes:', err));
+    }
+  } catch (e) {
+    console.error('[Main] Modes hydrate skipped:', e);
+  }
 
   // Note: We do NOT force dock show here anymore, respecting stealth mode.
 

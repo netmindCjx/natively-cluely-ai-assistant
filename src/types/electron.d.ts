@@ -249,6 +249,8 @@ export interface ElectronAPI {
 
   onMeetingsUpdated: (callback: () => void) => () => void
 
+  onAuthSessionExpired: (callback: () => void) => () => void
+
   // Provider Compatibility
   onIncompatibleProviderWarning: (callback: (data: { count: number, oldProvider: string, newProvider: string }) => void) => () => void;
   reindexIncompatibleMeetings: () => Promise<void>;

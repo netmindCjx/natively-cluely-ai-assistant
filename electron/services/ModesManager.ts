@@ -1,4 +1,4 @@
-import { DatabaseManager } from '../db/DatabaseManager';
+import { CloudClient } from './CloudClient';
 import {
     MODE_GENERAL_PROMPT,
     MODE_LOOKING_FOR_WORK_PROMPT,
@@ -125,7 +125,8 @@ function rowToMode(row: any): Mode {
         name: row.name,
         templateType: row.template_type as ModeTemplateType,
         customContext: row.custom_context ?? '',
-        isActive: row.is_active === 1,
+        // Backend returns is_active as a boolean (Postgres); tolerate the old 1/0 too.
+        isActive: row.is_active === true || row.is_active === 1,
         createdAt: row.created_at,
     };
 }
@@ -154,6 +155,14 @@ function rowToSection(row: any): ModeNoteSection {
 export class ModesManager {
     private static instance: ModesManager;
 
+    // In-memory cache so the public API stays synchronous (LLMHelper builds prompts on a
+    // latency-sensitive path). Hydrated from the cloud on login via hydrate(); mutations update
+    // the cache optimistically and write through to the backend (fire-and-forget + log).
+    private modesCache: Mode[] = [];
+    private sectionsCache: Map<string, ModeNoteSection[]> = new Map();
+    private filesCache: Map<string, ModeReferenceFile[]> = new Map();
+    private hydrated = false;
+
     private constructor() {}
 
     public static getInstance(): ModesManager {
@@ -163,53 +172,65 @@ export class ModesManager {
         return ModesManager.instance;
     }
 
+    private get cloud() {
+        return CloudClient.getInstance();
+    }
+
+    private fire(p: Promise<any>, label: string): void {
+        Promise.resolve(p).catch(e => console.error(`[ModesManager] ${label} failed:`, e));
+    }
+
+    /**
+     * Load all modes (+ their note sections and reference files) from the cloud into the cache.
+     * Call after the user is authenticated. Safe to call repeatedly. The backend lazily seeds a
+     * default "General" mode on first read, so no client-side seeding is needed.
+     */
+    public async hydrate(): Promise<void> {
+        try {
+            const modeRows = (await this.cloud.getModes()) || [];
+            this.modesCache = modeRows.map(rowToMode);
+            this.sectionsCache.clear();
+            this.filesCache.clear();
+            await Promise.all(
+                this.modesCache.map(async mode => {
+                    const [sections, files] = await Promise.all([
+                        this.cloud.getNoteSections(mode.id),
+                        this.cloud.getReferenceFiles(mode.id),
+                    ]);
+                    this.sectionsCache.set(mode.id, (sections || []).map(rowToSection));
+                    this.filesCache.set(mode.id, (files || []).map(rowToFile));
+                }),
+            );
+            this.hydrated = true;
+        } catch (e) {
+            console.error('[ModesManager] hydrate failed:', e);
+        }
+    }
+
+    public isHydrated(): boolean {
+        return this.hydrated;
+    }
+
     // ── Modes ─────────────────────────────────────────────────────
 
     public getModes(): Mode[] {
-        const modes = DatabaseManager.getInstance().getModes().map(rowToMode);
-        
-        // Auto-seed the un-deletable General mode if it doesn't exist
-        if (!modes.some(m => m.templateType === 'general')) {
-            const generalMode = this.createMode({ name: 'General', templateType: 'general' });
-            modes.push(generalMode);
-        }
-        
-        // Always enforce 'general' at the very top of the list
+        const modes = [...this.modesCache];
+        // Enforce 'general' at the very top of the list.
         modes.sort((a, b) => {
             if (a.templateType === 'general') return -1;
             if (b.templateType === 'general') return 1;
-            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(); // oldest first or whatever default
+            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         });
-        
         return modes;
     }
 
     public getActiveMode(): Mode | null {
-        const row = DatabaseManager.getInstance().getActiveMode();
-        return row ? rowToMode(row) : null;
+        return this.modesCache.find(m => m.isActive) ?? null;
     }
 
     public createMode(params: { name: string; templateType: ModeTemplateType }): Mode {
         const id = `mode_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        DatabaseManager.getInstance().createMode({
-            id,
-            name: params.name,
-            templateType: params.templateType,
-            customContext: '',
-        });
-        // Seed default note sections for this template type
-        const defaultSections = TEMPLATE_NOTE_SECTIONS[params.templateType] ?? [];
-        defaultSections.forEach((s, i) => {
-            const sectionId = `ns_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`;
-            DatabaseManager.getInstance().addNoteSection({
-                id: sectionId,
-                modeId: id,
-                title: s.title,
-                description: s.description,
-                sortOrder: i,
-            });
-        });
-        return {
+        const mode: Mode = {
             id,
             name: params.name,
             templateType: params.templateType,
@@ -217,65 +238,96 @@ export class ModesManager {
             isActive: false,
             createdAt: new Date().toISOString(),
         };
+        this.modesCache.push(mode);
+        this.fire(
+            this.cloud.createMode({ id, name: params.name, template_type: params.templateType, custom_context: '' }),
+            'createMode',
+        );
+        // Seed default note sections for this template type (cache + cloud).
+        const defaultSections = TEMPLATE_NOTE_SECTIONS[params.templateType] ?? [];
+        const sections: ModeNoteSection[] = [];
+        defaultSections.forEach((s, i) => {
+            const sectionId = `ns_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 6)}`;
+            sections.push({ id: sectionId, modeId: id, title: s.title, description: s.description, sortOrder: i, createdAt: new Date().toISOString() });
+            this.fire(
+                this.cloud.addNoteSection(id, { id: sectionId, title: s.title, description: s.description, sort_order: i }),
+                'createMode/addNoteSection',
+            );
+        });
+        this.sectionsCache.set(id, sections);
+        this.filesCache.set(id, []);
+        return mode;
     }
 
     public updateMode(id: string, updates: { name?: string; templateType?: ModeTemplateType; customContext?: string }): void {
-        DatabaseManager.getInstance().updateMode(id, updates);
+        const mode = this.modesCache.find(m => m.id === id);
+        if (mode) {
+            if (updates.name !== undefined) mode.name = updates.name;
+            if (updates.templateType !== undefined) mode.templateType = updates.templateType;
+            if (updates.customContext !== undefined) mode.customContext = updates.customContext;
+        }
+        const cloudUpdates: { name?: string; template_type?: string; custom_context?: string } = {};
+        if (updates.name !== undefined) cloudUpdates.name = updates.name;
+        if (updates.templateType !== undefined) cloudUpdates.template_type = updates.templateType;
+        if (updates.customContext !== undefined) cloudUpdates.custom_context = updates.customContext;
+        this.fire(this.cloud.updateMode(id, cloudUpdates), 'updateMode');
     }
 
     public deleteMode(id: string): void {
-        DatabaseManager.getInstance().deleteMode(id);
+        this.modesCache = this.modesCache.filter(m => m.id !== id);
+        this.sectionsCache.delete(id);
+        this.filesCache.delete(id);
+        this.fire(this.cloud.deleteMode(id), 'deleteMode');
     }
 
     public setActiveMode(id: string | null): void {
-        DatabaseManager.getInstance().setActiveMode(id);
+        this.modesCache.forEach(m => { m.isActive = m.id === id; });
+        this.fire(this.cloud.setActiveMode(id), 'setActiveMode');
     }
 
     // ── Reference Files ───────────────────────────────────────────
 
     public getReferenceFiles(modeId: string): ModeReferenceFile[] {
-        return DatabaseManager.getInstance().getReferenceFiles(modeId).map(rowToFile);
+        return this.filesCache.get(modeId) ?? [];
     }
 
     public addReferenceFile(params: { modeId: string; fileName: string; content: string }): ModeReferenceFile {
         const id = `ref_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        DatabaseManager.getInstance().addReferenceFile({
-            id,
-            modeId: params.modeId,
-            fileName: params.fileName,
-            content: params.content,
-        });
-        return {
+        const file: ModeReferenceFile = {
             id,
             modeId: params.modeId,
             fileName: params.fileName,
             content: params.content,
             createdAt: new Date().toISOString(),
         };
+        const list = this.filesCache.get(params.modeId) ?? [];
+        list.push(file);
+        this.filesCache.set(params.modeId, list);
+        this.fire(
+            this.cloud.addReferenceFile(params.modeId, { id, file_name: params.fileName, content: params.content }),
+            'addReferenceFile',
+        );
+        return file;
     }
 
     public deleteReferenceFile(id: string): void {
-        DatabaseManager.getInstance().deleteReferenceFile(id);
+        for (const [modeId, list] of this.filesCache) {
+            this.filesCache.set(modeId, list.filter(f => f.id !== id));
+        }
+        this.fire(this.cloud.deleteReferenceFile(id), 'deleteReferenceFile');
     }
 
     // ── Note Sections ─────────────────────────────────────────────
 
     public getNoteSections(modeId: string): ModeNoteSection[] {
-        return DatabaseManager.getInstance().getNoteSections(modeId).map(rowToSection);
+        return this.sectionsCache.get(modeId) ?? [];
     }
 
     public addNoteSection(params: { modeId: string; title: string; description: string }): ModeNoteSection {
         const existingSections = this.getNoteSections(params.modeId);
         const sortOrder = existingSections.length;
         const id = `ns_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        DatabaseManager.getInstance().addNoteSection({
-            id,
-            modeId: params.modeId,
-            title: params.title,
-            description: params.description,
-            sortOrder,
-        });
-        return {
+        const section: ModeNoteSection = {
             id,
             modeId: params.modeId,
             title: params.title,
@@ -283,18 +335,36 @@ export class ModesManager {
             sortOrder,
             createdAt: new Date().toISOString(),
         };
+        this.sectionsCache.set(params.modeId, [...existingSections, section]);
+        this.fire(
+            this.cloud.addNoteSection(params.modeId, { id, title: params.title, description: params.description, sort_order: sortOrder }),
+            'addNoteSection',
+        );
+        return section;
     }
 
     public updateNoteSection(id: string, updates: { title?: string; description?: string }): void {
-        DatabaseManager.getInstance().updateNoteSection(id, updates);
+        for (const [modeId, list] of this.sectionsCache) {
+            const section = list.find(s => s.id === id);
+            if (section) {
+                if (updates.title !== undefined) section.title = updates.title;
+                if (updates.description !== undefined) section.description = updates.description;
+                this.sectionsCache.set(modeId, [...list]);
+            }
+        }
+        this.fire(this.cloud.updateNoteSection(id, updates), 'updateNoteSection');
     }
 
     public deleteNoteSection(id: string): void {
-        DatabaseManager.getInstance().deleteNoteSection(id);
+        for (const [modeId, list] of this.sectionsCache) {
+            this.sectionsCache.set(modeId, list.filter(s => s.id !== id));
+        }
+        this.fire(this.cloud.deleteNoteSection(id), 'deleteNoteSection');
     }
 
     public removeAllNoteSections(modeId: string): void {
-        DatabaseManager.getInstance().deleteAllNoteSections(modeId);
+        this.sectionsCache.set(modeId, []);
+        this.fire(this.cloud.deleteAllNoteSections(modeId), 'removeAllNoteSections');
     }
 
     // ── LLM Context ───────────────────────────────────────────────

@@ -702,6 +702,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     }
   },
 
+  onAuthSessionExpired: (callback: () => void) => {
+    const subscription = () => callback()
+    ipcRenderer.on("auth-session-expired", subscription)
+    return () => {
+      ipcRenderer.removeListener("auth-session-expired", subscription)
+    }
+  },
+
   // Window Mode
   setWindowMode: (mode: 'launcher' | 'overlay', inactive?: boolean) => ipcRenderer.invoke("set-window-mode", mode, inactive),
 
