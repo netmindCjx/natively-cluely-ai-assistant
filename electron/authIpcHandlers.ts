@@ -20,8 +20,12 @@ export function initializeAuthIpcHandlers(): void {
     try {
       const { ModesManager } = require("./services/ModesManager")
       ModesManager.getInstance().hydrate().catch(() => {})
+      const { SettingsManager } = require("./services/SettingsManager")
+      SettingsManager.getInstance().hydrateFromCloud().catch(() => {})
+      const { KeybindManager } = require("./services/KeybindManager")
+      KeybindManager.getInstance().hydrateFromCloud().catch(() => {})
     } catch {
-      /* ModesManager may not be loaded in non-launcher windows */
+      /* managers may not be loaded in non-launcher windows */
     }
     return true
   })

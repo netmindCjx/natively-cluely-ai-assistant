@@ -2,6 +2,8 @@ import { app, globalShortcut, Menu, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
 import fs from 'fs';
 
+import { CloudClient } from './CloudClient';
+
 export interface KeybindConfig {
     id: string;
     label: string;
@@ -174,17 +176,70 @@ export class KeybindManager {
         }
     }
 
+    private overridesPayload(): Array<{ id: string; accelerator: string }> {
+        return Array.from(this.keybinds.values()).map(kb => ({ id: kb.id, accelerator: kb.accelerator }));
+    }
+
     private save() {
         try {
-            const data = Array.from(this.keybinds.values()).map(kb => ({
-                id: kb.id,
-                accelerator: kb.accelerator
-            }));
+            const data = this.overridesPayload();
             const tmpPath = this.filePath + '.tmp';
             fs.writeFileSync(tmpPath, JSON.stringify(data, null, 2));
             fs.renameSync(tmpPath, this.filePath);
         } catch (error) {
             console.error('[KeybindManager] Failed to save keybinds:', error);
+        }
+        this.scheduleCloudPush();
+    }
+
+    private cloudPushTimer: NodeJS.Timeout | null = null;
+    private hydrated = false;
+
+    public isHydrated(): boolean {
+        return this.hydrated;
+    }
+
+    private scheduleCloudPush(): void {
+        if (!CloudClient.getInstance().isAuthenticated()) return;
+        if (this.cloudPushTimer) clearTimeout(this.cloudPushTimer);
+        this.cloudPushTimer = setTimeout(() => {
+            CloudClient.getInstance()
+                .putKeybinds(this.overridesPayload())
+                .catch(e => console.error('[KeybindManager] cloud push failed:', e));
+        }, 800);
+        if (this.cloudPushTimer.unref) this.cloudPushTimer.unref();
+    }
+
+    /** Apply persisted {id, accelerator} overrides onto the in-memory defaults. */
+    private applyOverrides(data: Array<{ id: string; accelerator: string }>): void {
+        for (const fileKb of data) {
+            if (this.keybinds.has(fileKb.id)) {
+                const current = this.keybinds.get(fileKb.id)!;
+                current.accelerator = fileKb.accelerator;
+                this.keybinds.set(fileKb.id, current);
+            }
+        }
+    }
+
+    /**
+     * Reconcile keybinds with the per-account cloud copy. Call after login. The local
+     * keybinds.json stays the boot cache (read synchronously so global shortcuts register before
+     * auth resolves); this converges devices and re-registers. Seeds the cloud from local if empty.
+     */
+    public async hydrateFromCloud(): Promise<void> {
+        try {
+            const cloud = await CloudClient.getInstance().getKeybinds();
+            if (Array.isArray(cloud) && cloud.length > 0) {
+                this.applyOverrides(cloud as Array<{ id: string; accelerator: string }>);
+                this.save();
+                this.registerGlobalShortcuts();
+                this.broadcastUpdate();
+            } else {
+                await CloudClient.getInstance().putKeybinds(this.overridesPayload());
+            }
+            this.hydrated = true;
+        } catch (e) {
+            console.error('[KeybindManager] hydrateFromCloud failed:', e);
         }
     }
 

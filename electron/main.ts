@@ -2805,16 +2805,22 @@ async function initializeApp() {
     console.error('[Main] Failed to recover unprocessed meetings:', err);
   });
 
-  // Warm the per-account modes cache for returning users (tokens already on disk).
+  // Warm the per-account caches for returning users (tokens already on disk).
   try {
     const { CloudClient } = require('./services/CloudClient');
-    const { ModesManager } = require('./services/ModesManager');
     if (CloudClient.getInstance().isAuthenticated()) {
+      const { ModesManager } = require('./services/ModesManager');
       ModesManager.getInstance().hydrate().catch((err: any) =>
         console.error('[Main] Failed to hydrate modes:', err));
+      const { SettingsManager } = require('./services/SettingsManager');
+      SettingsManager.getInstance().hydrateFromCloud().catch((err: any) =>
+        console.error('[Main] Failed to hydrate settings:', err));
+      const { KeybindManager } = require('./services/KeybindManager');
+      KeybindManager.getInstance().hydrateFromCloud().catch((err: any) =>
+        console.error('[Main] Failed to hydrate keybinds:', err));
     }
   } catch (e) {
-    console.error('[Main] Modes hydrate skipped:', e);
+    console.error('[Main] Cache hydrate skipped:', e);
   }
 
   // Note: We do NOT force dock show here anymore, respecting stealth mode.
