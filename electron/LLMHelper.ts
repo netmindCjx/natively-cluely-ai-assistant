@@ -3305,6 +3305,26 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       }
     }
 
+    // ATTEMPT 2: OpenAI-compatible client (covers DeepSeek / Netmind-hosted and GPT models).
+    // Without this, users who only configured an OpenAI/DeepSeek key got empty summaries
+    // because the chain previously jumped straight from Groq to Gemini.
+    if (this.openaiClient) {
+      console.log(`[LLMHelper] Attempting OpenAI/DeepSeek for summary...`);
+      try {
+        const text = await this.withTimeout(
+          this.generateWithOpenai(`Context:\n${context}`, systemPrompt),
+          60000,
+          "OpenAI Summary"
+        );
+        if (text.trim().length > 0) {
+          console.log(`[LLMHelper] ✅ OpenAI/DeepSeek summary generated successfully.`);
+          return this.processResponse(text);
+        }
+      } catch (e: any) {
+        console.warn(`[LLMHelper] ⚠️ OpenAI/DeepSeek summary failed: ${e.message}. Falling back to Gemini...`);
+      }
+    }
+
     // ATTEMPT 3: Gemini Flash (with 2 retries = 3 attempts total)
     console.log(`[LLMHelper] Attempting Gemini Flash for summary...`);
     const contents = [{ text: `${systemPrompt}\n\nCONTEXT:\n${context}` }];
