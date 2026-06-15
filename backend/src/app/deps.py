@@ -7,6 +7,7 @@ import jwt
 from .config import Settings, get_settings
 from .services.aliyun_captcha import AliyunCaptchaVerifier, CaptchaVerifier, NoopCaptchaVerifier
 from .services.aliyun_pnvs import AliyunPnvsSmsSender, MockSmsSender, SmsSender
+from .services.data_repo import DataRepo, InMemoryDataRepo, SupabaseDataRepo
 from .services.jwt_service import JwtService
 from .services.rate_limiter import InMemoryRateLimiter, RateLimiter
 from .services.user_repo import InMemoryUserRepo, SupabaseUserRepo, User, UserRepo
@@ -33,6 +34,16 @@ def get_user_repo() -> UserRepo:
     if not settings.supabase_enabled:
         return InMemoryUserRepo()
     return SupabaseUserRepo(
+        url=settings.supabase_url, service_role_key=settings.supabase_service_role_key
+    )
+
+
+@lru_cache
+def get_data_repo() -> DataRepo:
+    settings = get_settings()
+    if not settings.supabase_enabled:
+        return InMemoryDataRepo()
+    return SupabaseDataRepo(
         url=settings.supabase_url, service_role_key=settings.supabase_service_role_key
     )
 

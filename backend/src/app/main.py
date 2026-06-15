@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .routers import auth, health
+from .routers import auth, embeddings, health, meetings, modes, profile, user_kv
 
 
 @asynccontextmanager
@@ -32,8 +32,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["*"],
 )
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(meetings.router)
+app.include_router(embeddings.router)
+app.include_router(modes.router)
+app.include_router(profile.router)
+app.include_router(user_kv.router)
