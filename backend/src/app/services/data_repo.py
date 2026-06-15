@@ -61,6 +61,7 @@ class DataRepo(Protocol):
 
     # embeddings
     async def upsert_chunks(self, user_id: str, meeting_id: str, chunks: list[dict]) -> None: ...
+    async def chunks_exist(self, user_id: str, meeting_id: str) -> bool: ...
     async def upsert_summary(
         self, user_id: str, meeting_id: str, summary_text: str, dim: int | None, embedding: list[float] | None
     ) -> None: ...
@@ -275,8 +276,8 @@ class SupabaseDataRepo:
 
     async def upsert_chunks(self, user_id: str, meeting_id: str, chunks: list[dict]) -> None:
         def _u():
-            # Re-index replaces the meeting's chunks.
-            self._client.table("chunks").delete().eq("user_id", user_id).eq("meeting_id", meeting_id).execute()
+            # Append semantics: the client embeds and ships chunks incrementally (per-chunk for
+            # live indexing). Clearing for re-index is explicit via delete_embeddings().
             if not chunks:
                 return
             rows = []
@@ -309,9 +310,24 @@ class SupabaseDataRepo:
                 "dim": dim,
                 "embedding": _vec_literal(embedding) if embedding else None,
             }
-            self._client.table("chunk_summaries").upsert(row, on_conflict="meeting_id").execute()
+            self._client.table("chunk_summaries").upsert(row, on_conflict="user_id,meeting_id").execute()
 
         await self._run(_u)
+
+    async def chunks_exist(self, user_id: str, meeting_id: str) -> bool:
+        def _q():
+            res = (
+                self._client.table("chunks")
+                .select("id")
+                .eq("user_id", user_id)
+                .eq("meeting_id", meeting_id)
+                .not_.is_("embedding", "null")
+                .limit(1)
+                .execute()
+            )
+            return bool(res.data)
+
+        return await self._run(_q)
 
     async def search_chunks(
         self, user_id: str, embedding: list[float], dim: int | None, meeting_id: str | None, limit: int, min_similarity: float
@@ -601,6 +617,7 @@ class InMemoryDataRepo:
 
     def __init__(self) -> None:
         self._meetings: dict[str, dict[str, dict]] = {}          # user -> id -> meeting row
+        self._chunks: dict[str, dict[str, list[dict]]] = {}       # user -> meeting_id -> chunk rows
         self._transcripts: dict[str, dict[str, list[dict]]] = {}  # user -> meeting_id -> rows
         self._interactions: dict[str, dict[str, list[dict]]] = {}
         self._modes: dict[str, dict[str, dict]] = {}
@@ -660,9 +677,13 @@ class InMemoryDataRepo:
         self._interactions.get(user_id, {}).pop(meeting_id, None)
         return removed is not None
 
-    # embeddings (no-op search in dev)
+    # embeddings (no real vector search in dev; tracks presence for chunks_exist)
     async def upsert_chunks(self, user_id: str, meeting_id: str, chunks: list[dict]) -> None:
-        return None
+        bucket = self._chunks.setdefault(user_id, {}).setdefault(meeting_id, [])
+        bucket.extend(chunks)
+
+    async def chunks_exist(self, user_id: str, meeting_id: str) -> bool:
+        return any(c.get("embedding") for c in self._chunks.get(user_id, {}).get(meeting_id, []))
 
     async def upsert_summary(self, user_id, meeting_id, summary_text, dim, embedding) -> None:
         return None
@@ -674,7 +695,7 @@ class InMemoryDataRepo:
         return []
 
     async def delete_embeddings(self, user_id: str, meeting_id: str) -> None:
-        return None
+        self._chunks.get(user_id, {}).pop(meeting_id, None)
 
     # modes
     def _ensure_default_mode(self, user_id: str) -> None:

@@ -544,10 +544,7 @@ export class AppState {
         const openaiKey = cm.getOpenaiApiKey() || process.env.OPENAI_API_KEY;
         const geminiKey = cm.getGeminiApiKey() || process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
         
-        this.ragManager = new RAGManager({ 
-            db: sqliteDb, 
-            dbPath: db.getDbPath(),
-            extPath: db.getExtPath(),
+        this.ragManager = new RAGManager({
             openaiKey,
             geminiKey,
             ollamaUrl: process.env.OLLAMA_URL || 'http://localhost:11434'

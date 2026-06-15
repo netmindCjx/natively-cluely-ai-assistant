@@ -514,7 +514,14 @@ export function initializeIpcHandlers(appState: AppState): void {
   })
 
   safeHandle("delete-meeting", async (_, id: string) => {
-    return DatabaseManager.getInstance().deleteMeeting(id);
+    const deleted = await DatabaseManager.getInstance().deleteMeeting(id);
+    // Cloud chunks no longer FK-cascade from meetings, so clear RAG data explicitly.
+    try {
+      await appState.getRAGManager()?.deleteMeetingData(id);
+    } catch (e) {
+      console.warn('[IPC] Failed to delete RAG data for meeting', id, e);
+    }
+    return deleted;
   });
 
   safeHandle("check-for-updates", async () => {
@@ -2175,7 +2182,7 @@ export function initializeIpcHandlers(appState: AppState): void {
 
     // For completed meetings, check if post-meeting RAG is processed.
     // For live meetings with JIT indexing, let RAGManager.queryMeeting() decide.
-    if (!ragManager.isMeetingProcessed(meetingId) && !ragManager.isLiveIndexingActive(meetingId)) {
+    if (!(await ragManager.isMeetingProcessed(meetingId)) && !ragManager.isLiveIndexingActive(meetingId)) {
       console.log(`[RAG] Meeting ${meetingId} not processed and no JIT indexing, falling back to regular chat`);
       return { fallback: true };
     }

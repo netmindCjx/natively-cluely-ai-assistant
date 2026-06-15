@@ -92,6 +92,15 @@ async def search_summaries(
     return await repo.search_summaries(user.id, body.embedding, body.dim, body.limit, body.min_similarity)
 
 
+@router.get("/meeting/{meeting_id}/exists")
+async def meeting_has_embeddings(
+    meeting_id: str,
+    user: Annotated[User, Depends(get_current_user)],
+    repo: Annotated[DataRepo, Depends(get_data_repo)],
+) -> dict:
+    return {"has_chunks": await repo.chunks_exist(user.id, meeting_id)}
+
+
 @router.delete("/meeting/{meeting_id}")
 async def delete_meeting_embeddings(
     meeting_id: str,

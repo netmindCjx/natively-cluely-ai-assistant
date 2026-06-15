@@ -125,7 +125,7 @@ export class LiveRAGIndexer {
                 for (let i = 0; i < chunkIds.length; i++) {
                     try {
                         const embedding = await this.embeddingPipeline.getEmbedding(indexedChunks[i].text);
-                        this.vectorStore.storeEmbedding(chunkIds[i], embedding);
+                        await this.vectorStore.storeEmbedding(chunkIds[i], embedding);
                         embeddedCount++;
                     } catch (err) {
                         console.warn(`[LiveRAGIndexer] Failed to embed chunk ${chunkIds[i]}:`, err);

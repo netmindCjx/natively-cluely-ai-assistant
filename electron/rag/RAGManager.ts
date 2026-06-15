@@ -2,7 +2,6 @@
 // Central orchestrator for RAG pipeline
 // Coordinates preprocessing, chunking, embedding, and retrieval
 
-import Database from 'better-sqlite3';
 import { LLMHelper } from '../LLMHelper';
 import { preprocessTranscript, RawSegment } from './TranscriptPreprocessor';
 import { chunkTranscript } from './SemanticChunker';
@@ -13,9 +12,6 @@ import { LiveRAGIndexer } from './LiveRAGIndexer';
 import { buildRAGPrompt, NO_CONTEXT_FALLBACK, NO_GLOBAL_CONTEXT_FALLBACK } from './prompts';
 
 export interface RAGManagerConfig {
-    db: Database.Database;
-    dbPath: string;       // Passed to VectorStore so worker can open its own read-only connection
-    extPath: string;      // Resolved sqlite-vec extension path (no platform suffix)
     openaiKey?: string;
     geminiKey?: string;
     ollamaUrl?: string;
@@ -30,7 +26,6 @@ export interface RAGManagerConfig {
  * 3. When user queries: query() -> retrieve + stream response
  */
 export class RAGManager {
-    private db: Database.Database;
     private vectorStore: VectorStore;
     private embeddingPipeline: EmbeddingPipeline;
     private retriever: RAGRetriever;
@@ -40,9 +35,8 @@ export class RAGManager {
     private _reprocessInFlight = new Set<string>();
 
     constructor(config: RAGManagerConfig) {
-        this.db = config.db;
-        this.vectorStore = new VectorStore(config.db, config.dbPath, config.extPath);
-        this.embeddingPipeline = new EmbeddingPipeline(config.db, this.vectorStore);
+        this.vectorStore = new VectorStore();
+        this.embeddingPipeline = new EmbeddingPipeline(this.vectorStore);
         this.retriever = new RAGRetriever(this.vectorStore, this.embeddingPipeline);
         this.liveIndexer = new LiveRAGIndexer(this.vectorStore, this.embeddingPipeline);
 
@@ -50,10 +44,6 @@ export class RAGManager {
             openaiKey: config.openaiKey,
             geminiKey: config.geminiKey,
             ollamaUrl: config.ollamaUrl
-        }).then(() => {
-            // Backfill provider metadata for meetings that were embedded before the
-            // embedding_provider column was written (or where the write failed silently).
-            this._backfillEmbeddingProviderMetadata();
         }).catch(() => { /* non-critical, suppress */ });
     }
 
@@ -155,7 +145,7 @@ export class RAGManager {
         }
 
         // Check if meeting has embeddings (post-meeting RAG)
-        const hasEmbeddings = this.vectorStore.hasEmbeddings(meetingId);
+        const hasEmbeddings = await this.vectorStore.hasEmbeddings(meetingId);
 
         if (!hasEmbeddings) {
             // JIT RAG: Check if live indexer has chunks for this meeting
@@ -254,7 +244,7 @@ export class RAGManager {
     /**
      * Check if a meeting has been processed for RAG
      */
-    isMeetingProcessed(meetingId: string): boolean {
+    async isMeetingProcessed(meetingId: string): Promise<boolean> {
         return this.vectorStore.hasEmbeddings(meetingId);
     }
 
@@ -269,17 +259,11 @@ export class RAGManager {
             console.log('[RAGManager] Embedding pipeline not ready, skipping live indexing');
             return;
         }
-        
-        // Ensure meeting row exists in DB to satisfy foreign key constraints for chunks
-        try {
-            this.db.prepare(`
-                INSERT OR IGNORE INTO meetings (id, title, start_time, duration_ms, summary_json, created_at, source, is_processed)
-                VALUES (?, 'Live Meeting', ?, 0, '{}', ?, 'manual', 0)
-            `).run(meetingId, Date.now(), new Date().toISOString());
-        } catch (e) {
-            console.warn('[RAGManager] Failed to create transient meeting row for live indexing', e);
-        }
-
+        // No FK in the cloud chunks table, so no transient meeting row is needed. Clear any
+        // leftover sentinel-id chunks from a previous live session so they don't accumulate or
+        // pollute global search (the real-id post-meeting reprocess is the canonical copy).
+        this.deleteMeetingData(meetingId).catch(err =>
+            console.warn('[RAGManager] Failed to clear prior live RAG data:', err));
         this.liveIndexer.start(meetingId);
     }
 
@@ -314,28 +298,9 @@ export class RAGManager {
     /**
      * Delete RAG data for a meeting
      */
-    deleteMeetingData(meetingId: string): void {
-        // 1. Delete from vector store (chunks and summaries)
-        this.vectorStore.deleteChunksForMeeting(meetingId);
-        
-        // 2. Clear embedding queue for this meeting to prevent "Chunk not found" errors on re-processing
-        try {
-            const info = this.db.prepare('DELETE FROM embedding_queue WHERE meeting_id = ?').run(meetingId);
-            if (info.changes > 0) {
-                console.log(`[RAGManager] Cleared ${info.changes} items from embedding_queue for meeting ${meetingId}`);
-            }
-        } catch (e) {
-            console.warn(`[RAGManager] Failed to clear embedding_queue for meeting ${meetingId}`, e);
-        }
-        
-        // 3. Clean up transient meeting row if it was a live session
-        try {
-            if (meetingId === 'live-meeting-current') {
-                this.db.prepare('DELETE FROM meetings WHERE id = ?').run(meetingId);
-            }
-        } catch (e) {
-            console.warn('[RAGManager] Failed to delete transient meeting row', e);
-        }
+    async deleteMeetingData(meetingId: string): Promise<void> {
+        // Delete chunks + summaries from the cloud vector store (and local buffer).
+        await this.vectorStore.deleteChunksForMeeting(meetingId);
     }
 
     /**
@@ -355,7 +320,7 @@ export class RAGManager {
 
         try {
             // delete existing RAG data first to avoid duplicates
-            this.deleteMeetingData(meetingId);
+            await this.deleteMeetingData(meetingId);
 
             // Fetch meeting details from the cloud
             const { DatabaseManager } = require('../db/DatabaseManager');
@@ -413,7 +378,7 @@ export class RAGManager {
         }
 
         // Check if already processed (has embeddings)
-        if (this.isMeetingProcessed(demoId)) {
+        if (await this.isMeetingProcessed(demoId)) {
             // console.log('[RAGManager] Demo meeting already processed');
             return;
         }
@@ -433,17 +398,7 @@ export class RAGManager {
      * Cleanup stale queue items for meetings that no longer exist
      */
     public cleanupStaleQueueItems(): void {
-        try {
-            const info = this.db.prepare(`
-                DELETE FROM embedding_queue 
-                WHERE meeting_id NOT IN (SELECT id FROM meetings)
-            `).run();
-            if (info.changes > 0) {
-                console.log(`[RAGManager] Cleaned up ${info.changes} stale queue items`);
-            }
-        } catch (error) {
-            console.error('[RAGManager] Failed to cleanup stale queue items:', error);
-        }
+        /* No persistent embedding queue in the cloud model — nothing to clean up. */
     }
 
     /**

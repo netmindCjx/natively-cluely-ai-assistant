@@ -230,6 +230,12 @@ export class CloudClient {
   deleteEmbeddings(meetingId: string) {
     return this.del(`/embeddings/meeting/${encodeURIComponent(meetingId)}`)
   }
+  async chunksExist(meetingId: string): Promise<boolean> {
+    const res = await this.get<{ has_chunks: boolean }>(
+      `/embeddings/meeting/${encodeURIComponent(meetingId)}/exists`,
+    )
+    return !!res?.has_chunks
+  }
 
   // --------------------------------------------------------------------- //
   // Modes                                                                 //
