@@ -2,6 +2,7 @@ import { app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { extractTextFromFile, extractStructured, ResumeStructured, JDStructured } from './ProfileExtractor';
+import { CloudClient } from './CloudClient';
 
 interface PersistedState {
   resume: ResumeStructured | null;
@@ -23,6 +24,9 @@ export class ProfileManager {
   private static instance: ProfileManager | null = null;
   private state: PersistedState = { ...EMPTY_STATE };
   private storePath: string;
+
+  private cloudPushTimer: NodeJS.Timeout | null = null;
+  private hydrated = false;
 
   private constructor() {
     this.storePath = path.join(app.getPath('userData'), 'profile.json');
@@ -47,11 +51,53 @@ export class ProfileManager {
     }
   }
 
-  private persist(): void {
+  /** Write the local boot cache only (no cloud push). */
+  private persistLocal(): void {
     try {
       fs.writeFileSync(this.storePath, JSON.stringify(this.state, null, 2), 'utf-8');
     } catch (e: any) {
       console.error('[ProfileManager] Failed to persist profile.json:', e.message);
+    }
+  }
+
+  private persist(): void {
+    this.persistLocal();      // local boot cache (sync, always)
+    this.scheduleCloudPush(); // cloud sync (debounced, if signed in)
+  }
+
+  public isHydrated(): boolean {
+    return this.hydrated;
+  }
+
+  private scheduleCloudPush(): void {
+    if (!CloudClient.getInstance().isAuthenticated()) return;
+    if (this.cloudPushTimer) clearTimeout(this.cloudPushTimer);
+    this.cloudPushTimer = setTimeout(() => {
+      CloudClient.getInstance()
+        .putProfile({ profile_state_json: this.state })
+        .catch(e => console.error('[ProfileManager] cloud push failed:', e));
+    }, 800);
+    if (this.cloudPushTimer.unref) this.cloudPushTimer.unref();
+  }
+
+  /**
+   * Reconcile the profile (resume / JD / mode) with the per-account cloud copy. Call after
+   * login. The local profile.json stays the boot cache (read synchronously so prompt-injection
+   * works before auth resolves); cloud is authoritative, and an empty cloud is seeded from local.
+   */
+  public async hydrateFromCloud(): Promise<void> {
+    try {
+      const profile = await CloudClient.getInstance().getProfile();
+      const cloudState = profile?.profile_state_json;
+      if (cloudState && Object.keys(cloudState).length > 0) {
+        this.state = { ...EMPTY_STATE, ...cloudState };
+        this.persistLocal();
+      } else {
+        await CloudClient.getInstance().putProfile({ profile_state_json: this.state });
+      }
+      this.hydrated = true;
+    } catch (e) {
+      console.error('[ProfileManager] hydrateFromCloud failed:', e);
     }
   }
 

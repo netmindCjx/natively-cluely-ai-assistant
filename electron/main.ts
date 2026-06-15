@@ -2818,6 +2818,9 @@ async function initializeApp() {
       const { KeybindManager } = require('./services/KeybindManager');
       KeybindManager.getInstance().hydrateFromCloud().catch((err: any) =>
         console.error('[Main] Failed to hydrate keybinds:', err));
+      const { ProfileManager } = require('./services/ProfileManager');
+      ProfileManager.getInstance().hydrateFromCloud().catch((err: any) =>
+        console.error('[Main] Failed to hydrate profile:', err));
     }
   } catch (e) {
     console.error('[Main] Cache hydrate skipped:', e);

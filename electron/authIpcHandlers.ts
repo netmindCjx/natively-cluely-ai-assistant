@@ -24,6 +24,8 @@ export function initializeAuthIpcHandlers(): void {
       SettingsManager.getInstance().hydrateFromCloud().catch(() => {})
       const { KeybindManager } = require("./services/KeybindManager")
       KeybindManager.getInstance().hydrateFromCloud().catch(() => {})
+      const { ProfileManager } = require("./services/ProfileManager")
+      ProfileManager.getInstance().hydrateFromCloud().catch(() => {})
     } catch {
       /* managers may not be loaded in non-launcher windows */
     }
