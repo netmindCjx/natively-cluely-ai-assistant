@@ -52,9 +52,14 @@ class SupabaseUserRepo:
     """Backed by Supabase Postgres. Uses the service_role key to bypass RLS."""
 
     def __init__(self, url: str, service_role_key: str):
+        from concurrent.futures import ThreadPoolExecutor
+
         from supabase import create_client
 
         self._client = create_client(url, service_role_key)
+        # Serialize calls on this client — the sync supabase/httpx HTTP/2 connection is not safe
+        # for concurrent cross-thread use (corrupts → "Server disconnected").
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="supabase-user")
 
     async def upsert_by_phone(self, phone: str) -> User:
         import asyncio
@@ -69,7 +74,7 @@ class SupabaseUserRepo:
             )
             return res.data[0]
 
-        row = await asyncio.get_running_loop().run_in_executor(None, _upsert)
+        row = await asyncio.get_running_loop().run_in_executor(self._executor, _upsert)
         return User(
             id=row["id"],
             phone=row["phone"],
@@ -84,7 +89,7 @@ class SupabaseUserRepo:
             res = self._client.table("users").select("*").eq("id", user_id).limit(1).execute()
             return res.data[0] if res.data else None
 
-        row = await asyncio.get_running_loop().run_in_executor(None, _query)
+        row = await asyncio.get_running_loop().run_in_executor(self._executor, _query)
         if not row:
             return None
         return User(

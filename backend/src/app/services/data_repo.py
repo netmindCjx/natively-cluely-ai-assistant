@@ -20,6 +20,7 @@ import asyncio
 import copy
 import logging
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
@@ -114,9 +115,14 @@ class SupabaseDataRepo:
         from supabase import create_client
 
         self._client = create_client(url, service_role_key)
+        # The supabase sync client wraps a single httpx (HTTP/2) connection that is NOT safe for
+        # concurrent use across threads — two in-flight requests on the same connection corrupt it
+        # ("Server disconnected"). A dedicated single-worker executor serializes all calls on this
+        # client while still keeping them off the event loop.
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="supabase-data")
 
     async def _run(self, fn, *args):
-        return await asyncio.get_running_loop().run_in_executor(None, fn, *args)
+        return await asyncio.get_running_loop().run_in_executor(self._executor, fn, *args)
 
     # ---- meetings ---- #
 
