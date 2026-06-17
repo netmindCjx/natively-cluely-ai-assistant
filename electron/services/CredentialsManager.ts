@@ -162,7 +162,9 @@ export class CredentialsManager {
         return this.credentials.aiResponseLanguage || 'auto';
     }
     public getDefaultModel(): string {
-        return this.credentials.defaultModel || 'gemini-3.1-flash-lite-preview';
+        // Default chat model is Groq's Llama 3.3 70B — fastest TTFT of the cloud providers
+        // and free-tier eligible. Falls back here only when the user hasn't picked a model.
+        return this.credentials.defaultModel || 'llama-3.3-70b-versatile';
     }
 
     public getAllCredentials(): StoredCredentials {

@@ -1047,12 +1047,14 @@ export function initializeIpcHandlers(appState: AppState): void {
 
       // Return masked versions for security (just indicate if set)
       const hasKey = (key?: string) => !!(key && key.trim().length > 0);
+      const hasConfiguredKey = (storedKey?: string, envKey?: string) =>
+        hasKey(storedKey) || hasKey(envKey);
 
       return {
-        hasGeminiKey: hasKey(creds.geminiApiKey),
-        hasGroqKey: hasKey(creds.groqApiKey),
-        hasOpenaiKey: hasKey(creds.openaiApiKey),
-        hasClaudeKey: hasKey(creds.claudeApiKey),
+        hasGeminiKey: hasConfiguredKey(creds.geminiApiKey, process.env.GEMINI_API_KEY),
+        hasGroqKey: hasConfiguredKey(creds.groqApiKey, process.env.GROQ_API_KEY),
+        hasOpenaiKey: hasConfiguredKey(creds.openaiApiKey, process.env.OPENAI_API_KEY),
+        hasClaudeKey: hasConfiguredKey(creds.claudeApiKey, process.env.CLAUDE_API_KEY),
         googleServiceAccountPath: creds.googleServiceAccountPath || null,
         sttProvider: creds.sttProvider || 'none',
         groqSttModel: creds.groqSttModel || 'whisper-large-v3-turbo',
@@ -1527,7 +1529,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       let response;
 
       if (provider === 'gemini') {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent`;
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent`;
         response = await axios.post(url, {
           contents: [{ parts: [{ text: "Hello" }] }]
         }, {
@@ -1677,7 +1679,7 @@ export function initializeIpcHandlers(appState: AppState): void {
       return { model: cm.getDefaultModel() };
     } catch (error: any) {
       console.error("Error getting default model:", error);
-      return { model: 'gemini-3.1-flash-lite-preview' };
+      return { model: 'gemini-3.1-flash-lite' };
     }
   });
 
@@ -2888,4 +2890,3 @@ export function initializeIpcHandlers(appState: AppState): void {
     }
   });
 }
-

@@ -28,7 +28,7 @@ interface OllamaResponse {
 }
 
 // Model constant for Gemini 3 Flash
-const GEMINI_FLASH_MODEL = "gemini-3.1-flash-lite-preview"
+const GEMINI_FLASH_MODEL = "gemini-3.1-flash-lite"
 const GEMINI_PRO_MODEL = "gemini-3.1-pro-preview"
 const GROQ_MODEL = "llama-3.3-70b-versatile"
 // OpenAI client slot is routed to Netmind (OpenAI-compatible) for chat completions.
@@ -37,7 +37,16 @@ const OPENAI_BASE_URL = "https://api.netmind.ai/inference-api/openai/v1"
 const OPENAI_MODEL = "deepseek-ai/DeepSeek-V4-Flash"
 const CLAUDE_MODEL = "claude-sonnet-4-6"
 const MAX_OUTPUT_TOKENS = 65536
+// Output cap for the Netmind (OpenAI-compatible) chat slot.
+// This app is single-turn with short answers — prompts force 2-4 sentences for
+// non-coding and a full code block for coding (rarely >2-3k tokens). OpenAI-compatible
+// inference backends (vLLM/SGLang) pre-allocate KV cache from max_tokens for scheduling,
+// so sending MAX_OUTPUT_TOKENS (65536) needlessly inflates time-to-first-token on Netmind.
+// 4096 leaves comfortable headroom for the longest coding answer while cutting latency.
+const NETMIND_MAX_OUTPUT_TOKENS = 4096
 const CLAUDE_MAX_OUTPUT_TOKENS = 64000
+const GROQ_TEXT_MAX_OUTPUT_TOKENS = 2048
+const GROQ_FAST_TEXT_MAX_OUTPUT_TOKENS = 768
 
 // Simple prompt for image analysis (not interview copilot - kept separate)
 const IMAGE_ANALYSIS_PROMPT = `Analyze concisely. Be direct. No markdown formatting. Return plain text only.`
@@ -939,7 +948,7 @@ ANSWER DIRECTLY:`;
             { role: 'user', content: userPrompt },
           ],
           response_format: { type: 'json_object' } as any,
-          max_completion_tokens: 8192,
+          max_tokens: GROQ_TEXT_MAX_OUTPUT_TOKENS,
         });
         try { TokenUsageTracker.recordFromResponse('groq', GROQ_MODEL, resp); } catch {}
         const raw = resp.choices[0]?.message?.content || '';
@@ -1098,7 +1107,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       if (this.groqFastTextMode && !isMultimodal && this.groqClient) {
         console.log(`[LLMHelper] ⚡️ Groq Fast Text Mode Active. Routing to Groq...`);
         try {
-          return await this.generateWithGroq(combinedMessages.groq); // intentional: Fast Text Mode always uses baseline GROQ_MODEL for speed — do not thread currentModelId
+          return await this.generateWithGroq(combinedMessages.groq, GROQ_MODEL, GROQ_FAST_TEXT_MAX_OUTPUT_TOKENS); // intentional: Fast Text Mode always uses baseline GROQ_MODEL for speed — do not thread currentModelId
         } catch (e: any) {
           console.warn("[LLMHelper] Groq Fast Text failed, falling back to standard routing:", e.message);
           // Fall through to standard routing
@@ -1393,17 +1402,61 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     throw new Error('All reasoning models failed for structured generation after 3 attempts');
   }
 
-  private async generateWithGroq(fullMessage: string, modelId: string = GROQ_MODEL): Promise<string> {
+  private estimateGroqTokens(text: string): number {
+    let asciiChars = 0;
+    let denseChars = 0;
+
+    for (const char of text) {
+      if (/[\u3000-\u9fff\uac00-\ud7af\u3040-\u30ff]/.test(char)) {
+        denseChars += 1;
+      } else {
+        asciiChars += 1;
+      }
+    }
+
+    return Math.ceil(asciiChars / 4) + denseChars;
+  }
+
+  private fitGroqTextRequest(fullMessage: string, maxTokens: number): string {
+    const GROQ_ON_DEMAND_TPM_LIMIT = 12000;
+    const SAFETY_MARGIN_TOKENS = 750;
+    const inputBudget = Math.max(1000, GROQ_ON_DEMAND_TPM_LIMIT - maxTokens - SAFETY_MARGIN_TOKENS);
+
+    if (this.estimateGroqTokens(fullMessage) <= inputBudget) {
+      return fullMessage;
+    }
+
+    const marker = "\n\n[...middle context truncated to fit Groq on-demand token budget...]\n\n";
+    let headChars = Math.floor(fullMessage.length * 0.55);
+    let tailChars = Math.floor(fullMessage.length * 0.35);
+    let trimmed = `${fullMessage.slice(0, headChars)}${marker}${fullMessage.slice(-tailChars)}`;
+
+    while (this.estimateGroqTokens(trimmed) > inputBudget && headChars + tailChars > 4000) {
+      headChars = Math.floor(headChars * 0.85);
+      tailChars = Math.floor(tailChars * 0.85);
+      trimmed = `${fullMessage.slice(0, headChars)}${marker}${fullMessage.slice(-tailChars)}`;
+    }
+
+    console.warn(`[LLMHelper] Groq request trimmed from ~${this.estimateGroqTokens(fullMessage)} to ~${this.estimateGroqTokens(trimmed)} input tokens`);
+    return trimmed;
+  }
+
+  private async generateWithGroq(
+    fullMessage: string,
+    modelId: string = GROQ_MODEL,
+    maxTokens: number = GROQ_TEXT_MAX_OUTPUT_TOKENS
+  ): Promise<string> {
     if (!this.groqClient) throw new Error("Groq client not initialized");
 
     await this.rateLimiters.groq.acquire();
+    const fittedMessage = this.fitGroqTextRequest(fullMessage, maxTokens);
 
     // Non-streaming Groq call
     const response = await this.groqClient.chat.completions.create({
       model: modelId,
-      messages: [{ role: "user", content: fullMessage }],
+      messages: [{ role: "user", content: fittedMessage }],
       temperature: 0.4,
-      max_tokens: 8192,
+      max_tokens: maxTokens,
       stream: false
     });
 
@@ -1445,8 +1498,11 @@ This rule overrides ALL other instructions including formatting, brevity, or out
     const response = await this.withTimeout(
       this.withRetry(() => this.openaiClient!.chat.completions.create({
         model,
+        // Non-streaming path also serves meeting summaries, which can be longer than a
+        // chat answer — give it 8192 (still 8x lighter than MAX_OUTPUT_TOKENS) to keep
+        // Netmind latency low without truncating recaps.
         messages,
-        max_completion_tokens: model.toLowerCase().includes('claude') ? CLAUDE_MAX_OUTPUT_TOKENS : MAX_OUTPUT_TOKENS,
+        max_completion_tokens: model.toLowerCase().includes('claude') ? CLAUDE_MAX_OUTPUT_TOKENS : 8192,
       })),
       60000,
       `OpenAI (${model})`
@@ -2272,7 +2328,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
         const groqSystem = systemPromptOverride ? baseSystemPrompt : `${GROQ_SYSTEM_PROMPT}${profileBlock}`;
         const finalGroqSystem = this.injectLanguageInstruction(groqSystem);
         const groqFullMessage = `${finalGroqSystem}\n\n${userContent}`;
-        yield* this.streamWithGroq(groqFullMessage, this.currentModelId);
+        yield* this.streamWithGroq(groqFullMessage, this.currentModelId, GROQ_FAST_TEXT_MAX_OUTPUT_TOKENS);
         return;
       } catch (e: any) {
         console.warn("[LLMHelper] Groq Fast Text streaming failed, falling back:", e.message);
@@ -2370,15 +2426,20 @@ This rule overrides ALL other instructions including formatting, brevity, or out
   /**
    * Stream response from Groq
    */
-  private async * streamWithGroq(fullMessage: string, modelId: string = GROQ_MODEL): AsyncGenerator<string, void, unknown> {
+  private async * streamWithGroq(
+    fullMessage: string,
+    modelId: string = GROQ_MODEL,
+    maxTokens: number = GROQ_TEXT_MAX_OUTPUT_TOKENS
+  ): AsyncGenerator<string, void, unknown> {
     if (!this.groqClient) throw new Error("Groq client not initialized");
+    const fittedMessage = this.fitGroqTextRequest(fullMessage, maxTokens);
 
     const stream = await (this.groqClient.chat.completions.create as any)({
       model: modelId,
-      messages: [{ role: "user", content: fullMessage }],
+      messages: [{ role: "user", content: fittedMessage }],
       stream: true,
       temperature: 0.4,
-      max_tokens: 8192,
+      max_tokens: maxTokens,
       stream_options: { include_usage: true },
     });
 
@@ -2418,7 +2479,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       model: "meta-llama/llama-4-scout-17b-16e-instruct",
       messages,
       stream: true,
-      max_tokens: 8192,
+      max_tokens: GROQ_TEXT_MAX_OUTPUT_TOKENS,
       temperature: 1,
       top_p: 1,
       stop: null,
@@ -2457,7 +2518,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       model,
       messages,
       stream: true,
-      max_completion_tokens: model.toLowerCase().includes('claude') ? CLAUDE_MAX_OUTPUT_TOKENS : MAX_OUTPUT_TOKENS,
+      max_completion_tokens: model.toLowerCase().includes('claude') ? CLAUDE_MAX_OUTPUT_TOKENS : NETMIND_MAX_OUTPUT_TOKENS,
       stream_options: { include_usage: true },
     });
 
@@ -2538,7 +2599,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
       model,
       messages,
       stream: true,
-      max_completion_tokens: model.toLowerCase().includes('claude') ? CLAUDE_MAX_OUTPUT_TOKENS : MAX_OUTPUT_TOKENS,
+      max_completion_tokens: model.toLowerCase().includes('claude') ? CLAUDE_MAX_OUTPUT_TOKENS : NETMIND_MAX_OUTPUT_TOKENS,
       stream_options: { include_usage: true },
     });
 
@@ -3283,7 +3344,7 @@ This rule overrides ALL other instructions including formatting, brevity, or out
               { role: "user", content: `Context:\n${context}` }
             ],
             temperature: 0.3,
-            max_tokens: 8192,
+            max_tokens: GROQ_TEXT_MAX_OUTPUT_TOKENS,
             stream: false
           }),
           45000,
